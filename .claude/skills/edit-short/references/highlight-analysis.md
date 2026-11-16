@@ -62,7 +62,8 @@ Score each dimension 0–10. Total = weighted sum × 10, from 0 to 100.
 
 - **< 50: reject** (`{"rejected": true, "reason": ...}`). Not every spike is a Short. Chat
   laughs at inside jokes, ads and alerts.
-- **50–64: a cautious edit.** Make it short, carried by the payoff and captions.
+- **50–64: a cautious edit.** Carried by the payoff and captions, but still built to the 50–60 s
+  target from the surrounding footage (set-up and aftermath), never padded.
 - **≥ 65: full treatment** from the playbook.
 
 Record the dimension scores and the total, e.g.

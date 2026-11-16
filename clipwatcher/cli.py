@@ -46,6 +46,10 @@ def build_parser() -> argparse.ArgumentParser:
         ("next-edit", "list editing jobs waiting for a manual Claude Code session"),
     ]:
         _common(sub.add_parser(name, help=help_))
+    p = sub.add_parser("ui", help="open the local dashboard (Twitch only): live chat, logs, clips, start/stop")
+    _common(p)
+    p.add_argument("--port", type=int, default=8765)
+    p.add_argument("--no-open", action="store_true", help="don't open the browser automatically")
     p = sub.add_parser("detect-file", help="run spike detection over an existing chat.log")
     _common(p)
     p.add_argument("chat_log")
@@ -283,6 +287,11 @@ def cmd_make_assets(cfg, db, args):
     print(f"{len(usable_items(lib))} usable of {len(lib['items'])} items in {ASSETS_DIR / 'library.json'}")
 
 
+def cmd_ui(cfg, db, args):
+    from .ui import serve
+    serve(cfg, args.config, port=args.port, open_browser=not args.no_open)
+
+
 def _check(cfg, quiet=False) -> list[str]:
     problems = []
     tools = [("streamlink", cfg["record"]["streamlink"], "pip install streamlink"),
@@ -334,4 +343,5 @@ COMMANDS = {
     "status": cmd_status, "check": cmd_check, "detect-file": cmd_detect_file,
     "retry": cmd_retry, "finish": cmd_finish, "next-edit": cmd_next_edit,
     "make-assets": cmd_make_assets, "storage": cmd_storage, "audiodetect": cmd_audiodetect,
+    "ui": lambda cfg, db, args: cmd_ui(cfg, db, args),
 }

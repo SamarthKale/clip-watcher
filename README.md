@@ -6,7 +6,7 @@ which edits it into a vertical YouTube Short.
 
 ```
 live stream -> recording (streamlink) -> chat log (Twitch IRC) -> 10 s chat buckets
-  -> 3x rolling-average spike [+ optional audio-loudness spike] -> raw footage (60 s + 60 s)
+  -> 3x rolling-average spike [+ optional audio-loudness spike] -> raw footage (75 s + 75 s)
   -> highlight signals (audio peaks, scene cuts, chat emotes) -> transcript (whisper.cpp)
   -> Claude Code edit (gaming skill pack) -> QA -> Short + thumbnail + cover + platform files
   -> verified backup of raw clips (external drive) -> safe cleanup of recordings
@@ -63,6 +63,19 @@ python -m clipwatcher run --channel SOME_CHANNEL
 `run` starts every stage, and each one restarts if it crashes. Stop it with Ctrl+C. To run for a
 fixed time, use `--for 600` (seconds).
 
+### Dashboard
+
+```bash
+python -m clipwatcher ui          # opens http://127.0.0.1:8765 (next free port if that one is taken)
+```
+
+A local, Twitch-only dashboard (standard library only, listens on 127.0.0.1). Paste a channel link
+and press **Start watching** to run the pipeline, or **Stop** to end it cleanly. It shows the live
+chat rate against the spike line, the read-only chat feed, every spike and where its clip is
+(cutting, transcribing, editing, done), a player for each finished Short, and a live log that merges
+every stage's output (recorder, chat, detector, extractor, transcriber, editor, storage). It never
+uploads or posts anything.
+
 ## Commands
 
 | Command | What it does |
@@ -71,6 +84,7 @@ fixed time, use `--for 600` (seconds).
 | `record`, `chat`, `detect` | Run steps 1–3 on their own |
 | `audiodetect` | Optional audio-spike trigger (`run` starts it when `detect.audio.enabled = true`) |
 | `extract`, `transcribe`, `edit`, `storage` | Run the queue workers for steps 4–7 |
+| `ui` | Local dashboard: start/stop, live chat and logs, clip status, Short player (`--port`, `--no-open`) |
 | `status` | Sessions, queue counts, recent jobs, errors and storage state |
 | `check` | Verify tools, storage drives and the sound library |
 | `retry <event_id> <stage>` | Re-queue a failed or skipped job |
@@ -89,7 +103,7 @@ Copy `config.example.toml` to `config.toml`. Every key is optional, and the defa
 | top level | `channel` | Twitch channel (login or URL). Can also be given with `--channel`. |
 | `[record]` | `quality` | e.g. `best`, `1080p60`, `720p60` |
 | `[detect]` | `threshold`, `min_spike_messages` | How strong a chat spike must be |
-| `[extract]` | `pre_seconds`, `post_seconds` | Length of the window around each spike (default 60 + 60) |
+| `[extract]` | `pre_seconds`, `post_seconds` | Length of the window around each spike (default 75 + 75) |
 | `[transcribe]` | `whisper_cli`, `model` | Paths to `whisper-cli` and the model |
 | `[edit]` | `mode`, `max_short_seconds` | `claude` for automatic edits, `manual` for `/edit-short` |
 | `[storage]` | `raw_clips_dir`, `recordings_archive_dir` | External-drive folders. Leave empty to keep everything local. |
@@ -121,7 +135,7 @@ Each numbered step is a separate process with its own queue. The queues live in
    and disconnects reset the baseline instead of counting as zeros. Event IDs look like
    `channel-<epoch>`, so a restart never creates duplicates.
 4. **Extract** (`extractor.py`). Waits until enough post-spike footage exists, then stream-copies
-   60 seconds before and 60 seconds after the spike. The copy has no re-encode, so the original
+   75 seconds before and 75 seconds after the spike. The copy has no re-encode, so the original
    quality and audio are kept. It writes `metadata.json`, `chat_context.json` (chat around the spike)
    and `frames/`.
 5. **Transcribe** (`transcriber.py`). Runs `whisper-cli` and writes `transcript.srt` (clip-relative),
