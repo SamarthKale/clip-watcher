@@ -121,6 +121,23 @@ def prepare_job(cfg: Config, event_id: str) -> Path:
     spike_text = _spike_text(spike, st)
     usable = usable_items(load_library())
     library_summary = ", ".join(it["id"] for it in usable) or "(none - run `python -m clipwatcher make-assets`)"
+    target = int(cfg["edit"].get("target_short_seconds") or 0)
+    length_hint = ""
+    if target:
+        length_hint = (f"\n   Aim for roughly {target}s (never over {max_len}s): keep the build-up, the reaction\n"
+                       "   and the aftermath that make it a complete story, and only cut dead air. A Short\n"
+                       "   under 30s is only right when the footage truly has nothing more worth keeping.")
+    render_all_section = ""
+    if cfg["edit"].get("render_all"):
+        render_all_section = (
+            "## Render every clip (overrides the playbook's score rule)\n"
+            "The owner wants a Short from EVERY spike, whatever its score. Do NOT reject for a low\n"
+            "`highlight_score`, a missing logline or \"no real moment\": a score under 50 is still\n"
+            "scored and recorded honestly, but you must then make the best, shortest Short the footage\n"
+            "allows (the 'cautious edit' treatment: short, carried by the payoff and captions) using the\n"
+            "most interesting 10-30 s you can find. Reject ONLY for the safety and rights rules in the\n"
+            "playbook's Hard rules (harassment, private information, sexual or dangerous/illegal\n"
+            "content, someone else's copyrighted video or music). If you do reject, say which rule.\n\n")
     brief = f"""# Editing job {event_id}
 
 You are the creative editor. Turn this raw Twitch footage into one YouTube Short.
@@ -133,7 +150,7 @@ Follow the playbook in `{files['playbook']}` (read it first).
   ({meta['clip']['source_start_utc']} -> {meta['clip']['source_end_utc']})
 - Event: `{event_id}`
 
-## Tools
+{render_all_section}## Tools
 - ffmpeg: `{Path(cfg['extract']['ffmpeg']).as_posix()}`
 - ffprobe: `{Path(cfg['extract']['ffprobe']).as_posix()}`
 - Editing toolkit: `{py} -m clipwatcher.editkit` - captions, audiomix, trimgraph, inspect, library,
@@ -169,7 +186,7 @@ Follow the playbook in `{files['playbook']}` (read it first).
 ```
 
 ## Deliverables in `{files['output_dir']}/`
-1. `short.mp4` - 1080x1920, H.264 + AAC, <= {max_len}s, about -14 LUFS, with your captions, motion and sound design.
+1. `short.mp4` - 1080x1920, H.264 + AAC, <= {max_len}s, about -14 LUFS, with your captions, motion and sound design.{length_hint}
 2. `edit_decisions.json` - logline, moment_type, highlight_score (the rubric), beats, segments,
    in/out (clip and recording time), composition, captions, effects, audio_assets (library ids),
    hook, thumbnail ({{"raw_t", "text", "accent"}}), revisions, rejected_alternatives.

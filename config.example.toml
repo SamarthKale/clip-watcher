@@ -67,7 +67,9 @@ threads = 4
 mode = "claude"              # "claude" = automatic headless edits, "manual" = run /edit-short yourself
 max_turns = 80
 timeout_seconds = 3600
-max_short_seconds = 60
+max_short_seconds = 60       # hard limit for a Short
+target_short_seconds = 50    # aim for about this length when the footage supports it (0 = no preference)
+render_all = false           # true = a Short from every spike whatever its score (highest triage score first)
 
 [export]                     # written by `finish` into <Short>/final/ - nothing is ever uploaded
 enabled = true

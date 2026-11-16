@@ -132,6 +132,18 @@ class QueueTests(unittest.TestCase):
         self.db.complete(job["id"], {"ok": 1}, next_stage="transcribe")
         self.assertEqual(self.db.claim("transcribe", 60)["event_id"], "c-1")
 
+    def test_claim_rank_takes_highest_score_first(self):
+        scores = {"c-low": 22.0, "c-high": 80.0, "c-mid": 33.0}
+        for i, ev in enumerate(scores):
+            self.db.add_event(ev, "c", float(i), float(i), {})
+        order = [self.db.claim("extract", 60, rank=scores.get)["event_id"] for _ in scores]
+        self.assertEqual(order, ["c-high", "c-mid", "c-low"])
+
+    def test_claim_without_rank_stays_oldest_first(self):
+        for i, ev in enumerate(("c-a", "c-b")):
+            self.db.add_event(ev, "c", float(i), float(i), {})
+        self.assertEqual(self.db.claim("extract", 60)["event_id"], "c-a")
+
     def test_crashed_worker_lease_expires(self):
         self.db.add_event("c-2", "c", 1.0, 1.0, {})
         self.db.claim("extract", -1)  # lease already expired = worker died
