@@ -1,174 +1,214 @@
 # Clip Watcher
 
 Clip Watcher watches a Twitch channel and finds the moments chat goes wild. It cuts raw footage
-around each moment and transcribes it, then hands it to **Claude Code**, which edits it into a
-vertical YouTube Short.
+around each moment, transcribes it, and hands it to [Claude Code](https://claude.com/claude-code),
+which edits it into a vertical YouTube Short.
 
 ```
-STREAM GOES LIVE -> STREAMLINK RECORDING -> TWITCH IRC CHAT -> 10s CHAT BUCKETS
- -> 5-MIN ROLLING AVERAGE -> 3x SPIKE -> RAW FOOTAGE (60s+60s) -> WHISPER TRANSCRIPT
- -> CLAUDE CODE EDIT QUEUE -> CREATIVE ANALYSIS -> FFMPEG RENDER -> EDITED CLIPS (internal)
- -> VERIFIED BACKUP OF RAW CUT CLIPS (external) -> SAFE CLEANUP OF RECORDINGS
+live stream -> recording (streamlink) -> chat log (Twitch IRC) -> 10 s chat buckets
+  -> 3x rolling-average spike -> raw footage (60 s before + 60 s after) -> transcript (whisper.cpp)
+  -> Claude Code edit -> finished Short (Edited Clips)
+  -> verified backup of raw clips (external drive) -> safe cleanup of recordings
 ```
 
-Each stage runs as its own process and has its own persistent queue in SQLite, so transcription
-or editing can never block recording or chat capture. A stage that crashes is restarted. A job it
-was working on is reclaimed once its lease expires, and failed jobs are retried with backoff.
+**Nothing is ever uploaded or published automatically.** Every Short is a file for you to review.
 
-## Install
+## Features
 
-1. Python 3.11+ (the code uses only the standard library).
-2. External tools, on PATH or configured in `config.toml`:
-   - **streamlink**: `pip install streamlink`
-   - **ffmpeg + ffprobe**: e.g. `winget install Gyan.FFmpeg`
-   - **whisper.cpp** `whisper-cli`, plus a model at `models/ggml-medium.en.bin`
-     (<https://github.com/ggml-org/whisper.cpp>; models at <https://huggingface.co/ggerganov/whisper.cpp>)
-   - **Claude Code** `claude`, for automatic editing
-3. Optionally, `copy config.example.toml config.toml` and edit it. If a tool isn't on PATH, set
-   its full path there (`record.streamlink`, `extract.ffmpeg`, `extract.ffprobe`,
-   `transcribe.whisper_cli`). On this machine, `pip install streamlink` put the binary in
-   `%APPDATA%\Python\Python313\Scripts\`, and FFmpeg is in `tools\ffmpeg\`.
-4. `python -m clipwatcher make-assets` generates the original sound library in `assets/`.
-5. `python -m clipwatcher check` reports anything that's missing, plus storage-drive status.
+- **Dynamic channel selection.** Nothing is hardcoded. Pass `--channel` or set it in `config.toml`.
+- **Read-only chat capture.** It connects anonymously over TLS and can only send the IRC handshake
+  commands (CAP, PASS, NICK, JOIN, PING, PONG). It never posts messages.
+- **Transparent spike detection.** The default algorithm is a plain 3x rolling average. It is easy
+  to read, tune and test.
+- **Keyframe-accurate cuts.** Stream copies start on a keyframe, so audio and video line up. The
+  source timestamps are recorded.
+- **Crash-tolerant pipeline.** Each stage is its own process with a persistent SQLite queue. Leases,
+  retries and backoff mean that a stage crashing or stalling never blocks recording or chat capture.
+- **Safe storage.** Raw clips are copied to an external drive and checksum-verified on both sides.
+  A recording is deleted only after all of its clips are extracted, verified and backed up.
+- **Attribution on every output.** Every clip and Short records the streamer, channel URL, recording
+  session, source timestamps and event ID.
+- **Original sound library.** The included sound effects and music are synthesized from scratch and
+  licensed CC0. The editor can use only assets with a known license.
 
-## Run
+## Requirements
+
+- **Python 3.11+.** The code uses only the standard library.
+- **[streamlink](https://streamlink.github.io/)**, for recording: `pip install streamlink`
+- **[FFmpeg](https://ffmpeg.org/)** (`ffmpeg` and `ffprobe`), for cutting and rendering.
+  On Windows: `winget install Gyan.FFmpeg`, or a static build from
+  [BtbN](https://github.com/BtbN/FFmpeg-Builds/releases).
+- **[whisper.cpp](https://github.com/ggml-org/whisper.cpp)** (`whisper-cli`), for transcription, plus a
+  model such as `ggml-base.en.bin` or `ggml-medium.en.bin`. Models are at
+  [huggingface.co/ggerganov/whisper.cpp](https://huggingface.co/ggerganov/whisper.cpp). Put the model
+  at `models/` and set `transcribe.model` to its path.
+- **[Claude Code](https://claude.com/claude-code)** (`claude`), for automatic editing. Each edit uses
+  your Claude account. Editing is optional: set `edit.mode = "manual"` to edit yourself.
+
+## Quick start
 
 ```bash
-python -m clipwatcher run --channel <twitch_channel>
+git clone https://github.com/SamarthKale/clip-watcher.git
+cd clip-watcher
+cp config.example.toml config.toml        # then edit it: paths, channel, tool locations
+python -m clipwatcher make-assets         # generate the sound library in assets/
+python -m clipwatcher check               # report missing tools and storage-drive status
+python -m clipwatcher run --channel SOME_CHANNEL
 ```
 
-The channel always comes from your input (`--channel`, or `channel` in `config.toml`). Nothing is
-hardcoded. You can also run each stage on its own, e.g. `python -m clipwatcher record --channel X`.
+`run` starts every stage, and each one restarts if it crashes. Stop it with Ctrl+C. To run for a
+fixed time, use `--for 600` (seconds).
+
+## Commands
 
 | Command | What it does |
 |---|---|
-| `run` | all stages, supervised (`--for 600` stops gracefully after 10 minutes) |
-| `record` / `chat` / `detect` | steps 1–3 for one channel |
-| `extract` / `transcribe` / `edit` | queue workers for steps 4–6 |
-| `storage` | step 7: verified backups to the external drive and safe cleanup |
-| `make-assets` | generate / re-index the sound library (`--force` regenerates) |
-| `status` | sessions, queue counts, recent jobs and errors |
-| `retry <event_id> <stage>` | re-queue a failed or skipped job |
-| `detect-file <chat.log>` | run the detector over an existing log (`--enqueue` to queue the results) |
-| `next-edit` | editing jobs waiting for a manual Claude session |
-| `finish <event_id>` | validate a Short and write its attribution metadata |
+| `run` | Runs all stages, supervised (`--for N` stops gracefully after N seconds) |
+| `record`, `chat`, `detect` | Run steps 1–3 on their own |
+| `extract`, `transcribe`, `edit`, `storage` | Run the queue workers for steps 4–7 |
+| `status` | Sessions, queue counts, recent jobs, errors and storage state |
+| `check` | Verify tools, storage drives and the sound library |
+| `retry <event_id> <stage>` | Re-queue a failed or skipped job |
+| `detect-file <chat.log>` | Run the detector over an existing log (`--enqueue` queues the results) |
+| `next-edit` | List editing jobs waiting for a manual Claude session |
+| `finish <event_id>` | Validate a Short and write its attribution metadata |
+| `make-assets` | Generate or re-index the sound library (`--force` regenerates) |
 
-## The stages
+## Configuration
 
-1. **Record** (`recorder.py`) runs `streamlink twitch.tv/CHANNEL best -o <session>.ts --retry-streams 30`
-   in a loop. It waits for the channel to go live and records continuously. On every disconnect it
-   starts a new session file. Quality is configurable. The local time of the first byte becomes the
-   session's timeline origin. Recordings are never modified and are marked read-only once they end.
-2. **Chat** (`chat.py`) connects to `irc.chat.twitch.tv:6697` over TLS, anonymously as
-   `justinfanNNNNN`, and joins `#channel`. If Twitch refuses anonymous access it uses your own
-   account (`chat.username` and `chat.oauth_token`, `chat:read` scope only). It reconnects
-   automatically and writes `chat.log` (JSON Lines) with messages, connect/disconnect markers and
-   5-second heartbeats. It is read-only by construction: only CAP/PASS/NICK/JOIN/PING/PONG can
-   ever be sent.
-3. **Detect** (`detector.py`) is the original algorithm and the default. It counts messages in
-   10 s buckets, takes the mean of the **previous** 5 minutes (never including the bucket being
-   tested), and flags a spike at ≥ 3x. Insufficient history is ignored. The baseline is floored
-   so dead or near-empty chat can't trigger, and a spike also needs a minimum message count.
-   Consecutive spike buckets merge into one event, followed by a cooldown. Disconnects and silent
-   gaps reset the baseline rather than counting as zeros. Event IDs are deterministic
-   (`channel-<epoch>`), so a restart never produces duplicates.
-4. **Extract** (`extractor.py`) waits until 60 s of post-spike footage exists. It then stream-copies
-   60 s before and 60 s after the spike (`ffmpeg -ss … -i session.ts -t … -c copy`), which keeps the
-   original quality and audio. It writes `metadata.json` (attribution, session, source timestamps,
-   spike stats), `chat_context.json` and representative `frames/`.
-5. **Transcribe** (`transcriber.py`) runs `whisper-cli` and writes `transcript.srt` (clip-relative),
-   `transcript.recording.srt` (on the original recording's timeline), `transcript.json` and
-   `words.json` (word-level timings). Nothing is burned in.
-6. **Edit** (`editor.py`) writes `data/jobs/<event>/EDIT_JOB.md` with everything Claude needs.
-   - With `edit.mode = "claude"` (the default), it runs `claude -p` headless with a restricted tool
-     list.
-   - With `"manual"`, open Claude Code in this folder and run `/edit-short`.
+Copy `config.example.toml` to `config.toml`. Every key is optional, and the defaults are in
+`clipwatcher/config.py`. Settings you'll most likely change:
 
-   Claude follows [`.claude/skills/edit-short/SKILL.md`](.claude/skills/edit-short/SKILL.md). It
-   analyzes the moment, picks the segment and duration, chooses the vertical layout, designs the
-   captions, motion and sound design, renders with FFmpeg and inspects the render. It works from
-   a beat sheet: hook, context, build, payoff, reaction, then a hard out that loops. It then saves
-   `short.mp4`, `edit_decisions.json` and `description.txt` to the Edited Clips library, and can
-   reject unusable clips. `finish` checks that the Short fully decodes, is 9:16, within length,
-   about -14 LUFS with true peak ≤ -0.5 dB, uses only licensed audio, and credits the streamer
-   and any audio. It then writes the attribution `metadata.json`.
+| Section | Key | Purpose |
+|---|---|---|
+| top level | `channel` | Twitch channel (login or URL). Can also be given with `--channel`. |
+| `[record]` | `quality` | e.g. `best`, `1080p60`, `720p60` |
+| `[detect]` | `threshold`, `min_spike_messages` | How strong a chat spike must be |
+| `[extract]` | `pre_seconds`, `post_seconds` | Length of the window around each spike (default 60 + 60) |
+| `[transcribe]` | `whisper_cli`, `model` | Paths to `whisper-cli` and the model |
+| `[edit]` | `mode`, `max_short_seconds` | `claude` for automatic edits, `manual` for `/edit-short` |
+| `[storage]` | `raw_clips_dir`, `recordings_archive_dir` | External-drive folders. Leave empty to keep everything local. |
+| `[sync]` | `chat_offset_seconds` | Shift chat onto the video timeline if you measure a drift |
 
-   **Editing toolkit** (`python -m clipwatcher.editkit …`), used by Claude:
-   - `captions`: animated, word-highlighted ASS captions, remapped through jump cuts, with slurs
-     masked.
-   - `audiomix`: cleaned voice, a music bed ducked under speech with optional drop-outs, and timed
-     sound effects, normalized to -14 LUFS.
-   - `trimgraph`, `inspect` (decode, loudness and contact-sheet QA) and `library`.
+Tool paths can be set in `config.toml` if they are not on your PATH: `record.streamlink`,
+`extract.ffmpeg`, `extract.ffprobe`, `transcribe.whisper_cli`.
 
-   **Sound library** (`assets/`): 15 sound effects and 4 music beds, synthesized from scratch by
-   `make-assets`. They are original and CC0, so they're safe from Content ID. To add licensed
-   tracks, such as YouTube Audio Library music:
-   1. Drop the files into `assets/music/` or `assets/sfx/`.
-   2. Run `make-assets`.
-   3. Fill in each new item's `license` (and `credit`, if attribution is required) in
-      `assets/library.json`.
+Chat works anonymously. An account token is needed only if Twitch refuses anonymous access. Keep
+tokens out of version control: set `TWITCH_OAUTH_TOKEN` in the environment instead of the file.
 
-   Items with an unknown license are never used.
-7. **Storage** (`storage.py`). Everything is produced on the internal drive first. Once a clip's
-   edit is finished (done, rejected or failed), the storage stage:
+## How it works
+
+Each numbered step is a separate process with its own queue. The queues live in
+`data/clipwatcher.db` (SQLite, WAL mode).
+
+1. **Record** (`recorder.py`). Runs `streamlink twitch.tv/CHANNEL best` in a loop. It waits for the
+   channel to go live and records continuously. Each disconnect starts a new session file. The local
+   time of the first byte is the session's timeline origin. Finished recordings are read-only.
+2. **Chat** (`chat.py`). Connects to `irc.chat.twitch.tv:6697` over TLS and joins the channel,
+   anonymously as `justinfanNNNNN`. If Twitch refuses anonymous access, it falls back to your own
+   account with a `chat:read` token. It reconnects automatically and writes `chat.log` as JSON Lines.
+   The log also records connect and disconnect markers and 5-second heartbeats.
+3. **Detect** (`detector.py`). Counts messages in 10-second buckets. Each bucket is compared with
+   the mean of the **previous** 5 minutes, which never includes the bucket being tested. A bucket at
+   3x or above is a spike. Spikes need a minimum message count and must not be near-zero chat. Gaps
+   and disconnects reset the baseline instead of counting as zeros. Event IDs look like
+   `channel-<epoch>`, so a restart never creates duplicates.
+4. **Extract** (`extractor.py`). Waits until enough post-spike footage exists, then stream-copies
+   60 seconds before and 60 seconds after the spike. The copy has no re-encode, so the original
+   quality and audio are kept. It writes `metadata.json`, `chat_context.json` (chat around the spike)
+   and `frames/`.
+5. **Transcribe** (`transcriber.py`). Runs `whisper-cli` and writes `transcript.srt` (clip-relative),
+   `transcript.recording.srt` (on the recording's timeline), `transcript.json` and `words.json` with
+   word-level timings. Nothing is burned into the video.
+6. **Edit** (`editor.py`). Writes `data/jobs/<event>/EDIT_JOB.md` and runs Claude Code headless with a
+   restricted tool list. Claude follows [`.claude/skills/edit-short/SKILL.md`](.claude/skills/edit-short/SKILL.md).
+   It chooses the moment and layout, designs captions, motion and sound, renders with FFmpeg, and
+   inspects the result. It writes `short.mp4`, `edit_decisions.json` and `description.txt`. A clip can
+   also be rejected. The toolkit is `python -m clipwatcher.editkit`, with `captions`, `audiomix`,
+   `trimgraph`, `inspect` and `library`.
+
+   `finish` then checks that the Short fully decodes, is 9:16, is within the length limit, sits
+   near -14 LUFS with true peak at or below -0.5 dB, uses only licensed audio and credits the
+   streamer.
+7. **Storage** (`storage.py`). Everything is produced on the internal drive first. Once an edit is
+   finished, rejected or failed, the storage stage:
    1. fully decodes the raw clip and the edited Short;
-   2. copies the raw-clip folder to the external drive under a `.partial` name, SHA-256-verifying
-      every file on both sides;
+   2. copies the raw-clip folder to the external drive under a `.partial` name, verifying SHA-256 on
+      both sides of every file;
    3. decodes the copy, writes `checksums.sha256` and renames the folder into place;
-   4. **only then** removes the local staging copy and temporary files.
+   4. **only then** removes the local staging copy.
 
-   A rejected or failed edit's notes go with the raw clip as `editor_outcome.json`, so Edited Clips
-   holds finished Shorts only.
-
-   **Recordings:**
+   Recordings are handled as follows:
    - **Deleted** only after the stream has ended (plus `settle_minutes`), every clip in it was
      extracted, and every raw clip is verified on the external drive.
-   - **Kept forever** if any extraction failed, so you can fix it and `retry`.
-   - **Recordings with no clips** are moved (verified) to `D:\ClipWatcher\Recordings` and kept.
-   - **Low internal disk:** below `record.rollover_below_gb` the recorder closes the current file
-     and continues in a new one, a gap of a few seconds. Ended recordings with work still pending
-     are moved (verified) to the external drive, and extraction continues from there. Below
-     `record.min_free_gb`, recording pauses.
-   - **External drive unplugged:** everything waits and nothing is deleted. Every move and
-     deletion is logged in the `storage_log` table.
+   - **Kept** if any extraction failed, so you can fix it and `retry`.
+   - **Moved** (and verified) to the external drive if they produced no clips.
+   - **Offloaded** to the external drive if the internal disk runs low while work is still pending.
 
-## Storage layout
+   If the external drive is unplugged, everything waits and nothing is deleted. Every move and
+   deletion is recorded in the `storage_log` table.
+
+## Output layout
+
 ```
-D:\ClipWatcher\Raw Cut Clips\<streamer>\<date>\<event>\   RAW CUT CLIPS (external)
+<external>\Raw Cut Clips\<streamer>\<date>\<event>\     raw clips, verified backups
     clip.mp4, metadata.json, transcript*.srt, words.json, chat_context.json, frames\,
-    editor_outcome.json (if rejected/failed), checksums.sha256
-C:\clipper\Edited Clips\<streamer>\<date>\<event>\         EDITED CLIPS (internal)
+    checksums.sha256, editor_outcome.json (if the edit was rejected or failed)
+<external>\Recordings\<streamer>\<session>.ts          recordings with no clips (kept)
+<project>\Edited Clips\<streamer>\<date>\<event>\      finished Shorts only
     short.mp4, edit_decisions.json, description.txt, metadata.json, edit_log.json
-D:\ClipWatcher\Recordings\<streamer>\<session>.ts           recordings with no clips (kept)
-
-C:\clipper\data\                                             working area (internal)
-    recordings\<channel>\<session>.ts    live/pending recordings (deleted once their clips are backed up)
-    chat\<channel>\chat.log              JSONL chat log
-    raw_clips\<event>\                   staging until backed up
-    jobs\<event>\                        EDIT_JOB.md + Claude run logs (temporary)
-    clipwatcher.db                        sessions, events, queues, storage_log
-    logs\                                 one log per stage
+<project>\data\                                        working area, safe to clear once backed up
+    recordings\, chat\, raw_clips\, jobs\, logs\, clipwatcher.db
 ```
-The paths are set under `[storage]` in `config.toml`. Leave `raw_clips_dir` empty to keep
-everything local: then nothing is backed up and no recording is deleted.
+
+## Sound library
+
+`make-assets` generates 15 sound effects and 4 music beds into `assets/`, and indexes them in
+`assets/library.json`. To add your own licensed music or effects:
+
+1. Drop the files into `assets/music/` or `assets/sfx/`.
+2. Run `make-assets`.
+3. Fill in each new item's `license` (and `credit`, if required) in `assets/library.json`.
+
+Items with an unknown license are never used.
 
 ## Timing
-Chat and video share one clock: the local receive time of each chat message, and the local time
-of the recording's first byte. If you measure a consistent drift, set `sync.chat_offset_seconds`.
-Stream-copy cuts are snapped back to the previous keyframe (Twitch uses 2 s GOPs) so audio and
-video start together, and the exact source start is recorded in each clip's metadata.
-Streamlink 8+ always drops Twitch ad segments. Clip timing still holds, because ffmpeg seeks by
-the stream's own timestamps, which continue straight past a dropped ad. A clip that spans an
-ad break will contain a jump.
+
+Chat and video share one clock: the local receive time of each chat message and the local time of
+each recording's first byte. If you measure a consistent drift, set `sync.chat_offset_seconds`.
+Cuts snap back to the previous keyframe (Twitch uses 2-second GOPs) so that audio and video start
+together. The exact source start is saved in each clip's metadata.
+
+Streamlink 8+ always drops Twitch ad segments. A clip that spans an ad break will contain a jump.
 
 ## Attribution and terms
-Every raw clip and Short carries the streamer name, the channel URL, the recording session, the
-source timestamps and the detection event ID. Suggested descriptions always credit and link the
-streamer. **Nothing is ever uploaded or published automatically.** Get the streamer's permission
-before you post their content, and follow Twitch's Terms of Service, YouTube's policies and
-copyright law (music in particular).
+
+Every clip and Short carries the streamer name, the channel URL, the recording session, the source
+timestamps and the detection event ID. Suggested descriptions credit and link the streamer.
+
+Before you post anything, get the streamer's permission. Follow Twitch's Terms of Service, YouTube's
+policies and copyright law, especially for music.
+
+## Project layout
+
+```
+clipwatcher/      the pipeline (one module per stage, plus db, storage, editkit, soundlib)
+.claude/skills/   the edit-short playbook that Claude Code follows
+assets/           generated sound library (library.json is local and gitignored)
+tests/            unit and integration tests
+config.example.toml
+```
 
 ## Tests
+
 ```bash
 python -m unittest discover -s tests -v
 ```
+
+Integration tests need `ffmpeg` and `ffprobe` and are skipped without them.
+
+## Status
+
+Tested live on Twitch: recording, chat capture, spike detection, extraction, transcription, Claude
+edits and storage backups with verification. Not yet tested live: the low-disk rollover during a
+real stream, and recordings that contain an ad break. Both are covered by unit tests only.
