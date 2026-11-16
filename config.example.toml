@@ -1,0 +1,61 @@
+# Copy to config.toml and adjust. Every key is optional; defaults live in clipwatcher/config.py.
+# The channel can also be given on the command line:  python -m clipwatcher run --channel NAME
+
+channel = ""                 # Twitch login or URL, e.g. "somestreamer" or "https://twitch.tv/somestreamer"
+streamer_display_name = ""   # used in credits; defaults to the channel login
+
+[paths]
+data_dir = "data"            # recordings/, chat/, raw_clips/, jobs/, shorts/, logs/ live under here
+
+[record]                     # STEP 1 - streamlink
+quality = "best"             # e.g. "best", "1080p60", "720p60", "720p"
+retry_streams = 30           # seconds between live checks while the channel is offline
+retry_open = 3
+extra_args = []              # e.g. ["--twitch-api-header", "Authorization=OAuth <browser auth-token>"]
+
+[chat]                       # STEP 2 - Twitch IRC, read-only
+server = "irc.chat.twitch.tv"
+port = 6697                  # 6697 = TLS (recommended); 6667 with tls = false
+tls = true
+# Used only if Twitch refuses anonymous (justinfan) access. Your own account; token needs chat:read.
+username = ""
+oauth_token = ""             # or set the TWITCH_OAUTH_TOKEN environment variable
+
+[detect]                     # STEP 3 - spike detection (original 3x rolling-average algorithm)
+bucket_seconds = 10
+window_seconds = 300
+threshold = 3.0
+min_history_seconds = 300
+min_baseline = 1.0
+min_spike_messages = 8
+cooldown_seconds = 90
+max_run_buckets = 6
+gap_seconds = 20
+
+[sync]
+chat_offset_seconds = 0.0    # shift chat time onto the video timeline if you measure a drift
+
+[extract]                    # STEP 4 - raw footage
+pre_seconds = 60
+post_seconds = 60
+safety_seconds = 10
+frames_every_seconds = 10
+frame_width = 640
+chat_context_seconds = 60
+
+[transcribe]                 # STEP 5 - whisper.cpp
+enabled = true
+whisper_cli = "whisper-cli"
+model = "models/ggml-medium.en.bin"
+language = "en"
+threads = 4
+
+[edit]                       # STEP 6 - Claude Code
+mode = "claude"              # "claude" = automatic headless edits, "manual" = run /edit-short yourself
+max_turns = 80
+timeout_seconds = 3600
+max_short_seconds = 60
+
+[queue]
+max_attempts = 4
+lease_seconds = 900
