@@ -6,6 +6,15 @@
     python -m clipwatcher.editkit inspect   short.mp4 --sheet work/inspect.jpg
     python -m clipwatcher.editkit library   [--type sfx|music] [--tag comedy]
 
+Gaming / highlight tools:
+    python -m clipwatcher.editkit signals   <raw clip>          # audio peaks, scene cuts, chat categories
+    python -m clipwatcher.editkit timeline  --source clip.mp4 --from 30 --to 48 --out work/tl.jpg
+    python -m clipwatcher.editkit grid      --source clip.mp4 --t 41 --out work/grid.jpg
+    python -m clipwatcher.editkit reframe   --source clip.mp4 stack --cam 1460,40,420,236 [--inset ...] [--preview 41]
+    python -m clipwatcher.editkit track     --source clip.mp4 --segments 30-48 [--mask X,Y,W,H]
+    python -m clipwatcher.editkit snap      --words words.json --segments 30.1-47.8
+    python -m clipwatcher.editkit thumbnail --source clip.mp4 --t 41.2 --text "1 HP *ACE*" --out thumbnail.jpg
+
 `--segments` is the keep-list in raw-clip seconds. Using the same list for the
 video trim, the captions and the audio mix keeps all three in sync after jump cuts.
 """
@@ -18,7 +27,7 @@ import re
 import sys
 from pathlib import Path
 
-from . import media
+from . import media, reframe, signals, thumbs
 from .config import load_config
 from .soundlib import ASSETS_DIR, load_library, usable_items
 
@@ -207,9 +216,13 @@ def cmd_audiomix(a) -> None:
     for k, (s, b) in enumerate(segs):
         graph.append(f"[0:a]atrim=start={s:.3f}:end={b:.3f},asetpts=PTS-STARTPTS,"
                      f"afade=t=in:d=0.012,afade=t=out:st={max(0, b - s - 0.012):.3f}:d=0.012[v{k}]")
+    # Order follows broadcast practice: noise reduction -> high-pass -> compression -> EQ -> gain.
+    denoise = "afftdn=nf=-28:tn=1," if a.enhance else ""
+    eq = ("equalizer=f=250:t=q:w=1.2:g=-2,equalizer=f=3500:t=q:w=1.4:g=2.5,"  # less mud, more presence
+          if a.enhance else "")
     graph.append("".join(f"[v{k}]" for k in range(len(segs))) + f"concat=n={len(segs)}:v=0:a=1,"
-                 f"highpass=f=70,acompressor=threshold=-20dB:ratio=3:attack=5:release=150:makeup=2,"
-                 f"volume={a.voice_gain}dB[voice]")
+                 f"{denoise}highpass=f=70,acompressor=threshold=-20dB:ratio=3:attack=5:release=150:makeup=2,"
+                 f"{eq}volume={a.voice_gain}dB[voice]")
     mix_inputs = ["[vmain]"]
     idx = 1
     if a.music:
@@ -276,7 +289,9 @@ def cmd_inspect(a) -> None:
     cfg = _cfg()
     ff, fp = cfg["extract"]["ffmpeg"], cfg["extract"]["ffprobe"]
     report = media.verify_playable(ff, fp, Path(a.file), full_decode=True)
-    report.update(media.loudness(ff, Path(a.file)) if report.get("audio") else {})
+    if report.get("audio"):
+        report["qa"] = media.qa_scan(ff, Path(a.file), report.get("duration", 0))
+        report.update({k: report["qa"][k] for k in ("lufs", "true_peak_db", "lra") if k in report["qa"]})
     if a.sheet:
         dur = report.get("duration", 0)
         n = a.frames
@@ -298,6 +313,191 @@ def cmd_library(a) -> None:
         if a.tag and a.tag not in it.get("tags", []):
             continue
         print(f"{it['id']:<24} {it.get('duration') or 0:6.2f}s  {','.join(it.get('tags', [])):<34} {it.get('use', '')}")
+
+
+# ---------------------------------------------------------------- gaming / highlight tools
+def _tools():
+    cfg = _cfg()
+    return cfg, cfg["extract"]["ffmpeg"], cfg["extract"]["ffprobe"]
+
+
+def _size(fp: str, src: str) -> tuple[int, int]:
+    v = media.summarize(media.probe(fp, Path(src))).get("video") or {}
+    if not v.get("width"):
+        raise SystemExit(f"{src} has no video stream")
+    return int(v["width"]), int(v["height"])
+
+
+def cmd_signals(a) -> None:
+    cfg, ff, fp = _tools()
+    clip = Path(a.clip)
+    existing = clip.parent / "signals.json"
+    if existing.exists() and not a.recompute:
+        sig = json.loads(existing.read_text(encoding="utf-8"))
+    else:
+        meta_p, chat_p = clip.parent / "metadata.json", clip.parent / "chat_context.json"
+        meta = json.loads(meta_p.read_text(encoding="utf-8")) if meta_p.exists() else {}
+        chat = json.loads(chat_p.read_text(encoding="utf-8")) if chat_p.exists() else {}
+        sp = meta.get("spike", {})
+        spike_t = a.spike if a.spike is not None else float(sp.get("spike_in_clip_s", 0))
+        sig = signals.analyze(ff, clip, chat.get("messages", []), spike_t,
+                              float(sp.get("peak_in_clip_s", spike_t)), sp.get("stats", {}))
+        if a.out:  # never write next to the raw clip: inputs are read-only
+            Path(a.out).parent.mkdir(parents=True, exist_ok=True)
+            Path(a.out).write_text(json.dumps(sig, indent=2), encoding="utf-8")
+    print("\n".join(signals.summary_lines(sig)))
+    sil = sig.get("audio", {}).get("silences", [])
+    print("- Silences (natural cut points): " + (", ".join(f"{s0:.1f}-{s1:.1f}" for s0, s1 in sil[:25]) or "none"))
+    if a.json:
+        print(json.dumps(sig, indent=2))
+
+
+def cmd_timeline(a) -> None:
+    """Filmstrip with timestamps over the waveform (the video-use 'timeline view')."""
+    cfg, ff, fp = _tools()
+    start, end, n = a.start, a.end, a.frames
+    if end <= start:
+        raise SystemExit("--to must be after --from")
+    dur = end - start
+    tw = max(80, a.width // n) // 2 * 2
+    label = (f"drawtext=text='%{{pts\\:hms\\:{start:.3f}}}':fontsize={max(12, tw // 11)}:fontcolor=white:"
+             f"box=1:boxcolor=black@0.65:boxborderw=3:x=4:y=4")
+    graph = (f"[0:v]trim=start={start:.3f}:end={end:.3f},setpts=PTS-STARTPTS,fps={n}/{dur:.4f},"
+             f"scale={tw}:-2,{label},tile={n}x1:padding=2:color=black[f];"
+             f"[0:a]atrim=start={start:.3f}:end={end:.3f},asetpts=PTS-STARTPTS,"
+             f"showwavespic=s={n * tw + 2 * (n - 1)}x{a.wave_height}:colors=0x4FC3F7[w];[f][w]vstack[out]")
+    Path(a.out).parent.mkdir(parents=True, exist_ok=True)
+    media.run([ff, "-hide_banner", "-loglevel", "error", "-nostdin", "-y", "-i", a.source,
+               "-filter_complex", graph, "-map", "[out]", "-frames:v", "1", "-update", "1", a.out], timeout=300)
+    times = [round(start + k * dur / n, 2) for k in range(n)]
+    print(f"wrote {a.out}: {n} frames at {times} (raw-clip seconds), waveform below")
+
+
+def cmd_grid(a) -> None:
+    """A frame with a labelled pixel grid, for reading facecam / HUD rectangles."""
+    cfg, ff, fp = _tools()
+    sw, sh = _size(fp, a.source)
+    step = a.step
+    fs = max(14, sw // 70)
+    parts = [f"drawgrid=w={step}:h={step}:t=2:c=yellow@0.55"]
+    for x in range(0, sw, step * 2):
+        parts.append(f"drawtext=text='{x}':x={x + 3}:y=3:fontsize={fs}:fontcolor=yellow:box=1:boxcolor=black@0.6")
+    for y in range(step * 2, sh, step * 2):
+        parts.append(f"drawtext=text='{y}':x=3:y={y + 3}:fontsize={fs}:fontcolor=yellow:box=1:boxcolor=black@0.6")
+    Path(a.out).parent.mkdir(parents=True, exist_ok=True)
+    media.run([ff, "-hide_banner", "-loglevel", "error", "-nostdin", "-y", "-ss", f"{a.t:.3f}", "-i", a.source,
+               "-frames:v", "1", "-vf", ",".join(parts), "-q:v", "3", "-update", "1", a.out], timeout=120)
+    print(f"wrote {a.out}: source is {sw}x{sh}; grid every {step}px, labels every {step * 2}px. "
+          f"Rectangles are X,Y,W,H in these source pixels.")
+
+
+def _layout_graph(a, sw: int, sh: int) -> str:
+    if a.layout == "stack":
+        g = reframe.stack(sw, sh, reframe.Rect.parse(a.cam),
+                          reframe.Rect.parse(a.game) if a.game else None, a.split, a.game_cx)
+    elif a.layout == "fullcam":
+        g = reframe.fullcam(sw, sh, reframe.Rect.parse(a.cam))
+    elif a.layout == "crop":
+        x = a.x_expr or (float(a.x) if a.x is not None else None)
+        g = reframe.crop(sw, sh, x=x, cx=a.cx, zoom=a.zoom)
+    else:
+        g = reframe.blurfill(sw, sh, zoom=a.zoom, cx=a.cx)
+    return reframe.with_insets(g, [reframe.Inset.parse(i) for i in a.inset or []], sw, sh)
+
+
+def cmd_reframe(a) -> None:
+    cfg, ff, fp = _tools()
+    sw, sh = _size(fp, a.source)
+    if a.layout in ("stack", "fullcam") and not a.cam:
+        raise SystemExit(f"{a.layout} needs --cam X,Y,W,H (read it off `editkit grid`)")
+    try:
+        graph = _layout_graph(a, sw, sh)
+    except ValueError as e:
+        raise SystemExit(str(e))
+    print(graph)
+    print(f"# reads [vcut] (from trimgraph), writes [vlay] 1080x1920; source {sw}x{sh}", file=sys.stderr)
+    if a.cam:
+        top = int(reframe.OUT_H * (a.split if a.layout == "stack" else 1.0))
+        up = reframe.upscale(reframe.Rect.parse(a.cam), reframe.OUT_W, top)
+        if up > 2.2:
+            print(f"# WARNING: the facecam is enlarged {up:.1f}x and will look soft - use a smaller "
+                  f"--split, keep it for short beats, or prefer the gameplay", file=sys.stderr)
+    if a.preview is not None:
+        out = a.preview_out or "work/reframe_preview.jpg"
+        Path(out).parent.mkdir(parents=True, exist_ok=True)
+        pre = f"[0:v]trim=start={a.preview:.3f}:duration=0.5,setpts=PTS-STARTPTS[vcut];"
+        media.run([ff, "-hide_banner", "-loglevel", "error", "-nostdin", "-y", "-i", a.source,
+                   "-filter_complex", pre + graph, "-map", "[vlay]", "-frames:v", "1", "-update", "1", out],
+                  timeout=300)
+        print(f"# preview frame at {a.preview}s -> {out}", file=sys.stderr)
+
+
+def cmd_track(a) -> None:
+    cfg, ff, fp = _tools()
+    sw, sh = _size(fp, a.source)
+    segs = parse_segments(a.segments)
+    masks = [reframe.Rect.parse(m) for m in a.mask or []]
+    res = reframe.track(ff, a.source, segs[0][0], segs[-1][1], sw, sh, masks, fps=a.fps, deadband=a.deadband)
+    keys = []
+    for t, c in res["keys"]:
+        o = remap(t, segs)
+        if o is not None:
+            keys.append((round(o, 3), c))
+    if not keys or keys[0][0] > 0:
+        keys.insert(0, (0.0, keys[0][1] if keys else 0.5))
+    keys = reframe.dedupe_keys(keys)
+    win = reframe._fit_crop(sw, sh, reframe.OUT_W / reframe.OUT_H, zoom=a.zoom)
+    expr = reframe.x_expression(keys, sw, win.w, ease=a.ease)
+    out = {"keys_output_s": keys, "x_expr": expr, "window": [win.w, win.h], "source": [sw, sh],
+           "samples": res["samples"]}
+    if a.out:
+        Path(a.out).parent.mkdir(parents=True, exist_ok=True)
+        Path(a.out).write_text(json.dumps(out, indent=2), encoding="utf-8")
+    print(f"{len(keys)} framing keyframes (OUTPUT seconds, centre as fraction of width): {keys}")
+    print(f'use: editkit reframe --source {a.source} crop --zoom {a.zoom} --x-expr "{expr}"')
+
+
+def snap_segments(segs, words, max_shift: float = 0.35, pad: float = 0.04) -> tuple[list, list[str]]:
+    """Move segment edges off words: starts go to the start of the word they cut into,
+    ends to the end of the word they cut into (within max_shift), never overlapping."""
+    ws = sorted((float(w["start"]), float(w["end"])) for w in words)
+    out, notes = [], []
+    for s, e in segs:
+        ns, ne = s, e
+        for a0, a1 in ws:
+            if a0 < s < a1:
+                ns = a0 - pad if s - a0 <= max_shift else a1 + pad
+                break
+        for a0, a1 in ws:
+            if a0 < e < a1:
+                ne = a1 + pad if a1 - e <= max_shift else a0 - pad
+                break
+        if out and ns < out[-1][1]:
+            ns = out[-1][1]
+        ns, ne = round(max(0.0, ns), 3), round(ne, 3)
+        if ne - ns < 0.2:
+            ns, ne = s, e
+        if (ns, ne) != (s, e):
+            notes.append(f"{s:.2f}-{e:.2f} -> {ns:.2f}-{ne:.2f}")
+        out.append((ns, ne))
+    return out, notes
+
+
+def cmd_snap(a) -> None:
+    data = json.loads(Path(a.words).read_text(encoding="utf-8"))
+    words = data["words"] if isinstance(data, dict) else data
+    segs, notes = snap_segments(parse_segments(a.segments), words, a.max_shift)
+    print(",".join(f"{s:.3f}-{e:.3f}" for s, e in segs))
+    print("\n".join(notes) or "no edge was inside a word", file=sys.stderr)
+
+
+def cmd_thumbnail(a) -> None:
+    cfg, ff, fp = _tools()
+    w, h = (int(v) for v in a.size.lower().split("x"))
+    out = thumbs.render(ff, Path(a.source), a.t, Path(a.out), (w, h), a.text or "", a.accent, a.font,
+                        a.font_size, a.position, a.crop)
+    problems = thumbs.check(fp, out, (w, h))
+    print(f"wrote {out} ({w}x{h})" + ("" if not problems else "  PROBLEMS: " + "; ".join(problems)))
 
 
 def main(argv=None) -> None:
@@ -332,6 +532,8 @@ def main(argv=None) -> None:
     m.add_argument("--sfx-gain", type=float, default=-6)
     m.add_argument("--voice-gain", type=float, default=0)
     m.add_argument("--target", type=float, default=-14, help="integrated loudness, LUFS")
+    m.add_argument("--enhance", action="store_true",
+                   help="voice polish: light denoise, less 250 Hz mud, more 3.5 kHz presence")
     t = sub.add_parser("trimgraph", help="print an ffmpeg trim/concat graph for a keep-list")
     t.add_argument("--segments", required=True)
     i = sub.add_parser("inspect", help="verify a render: streams, decode errors, loudness, contact sheet")
@@ -341,9 +543,69 @@ def main(argv=None) -> None:
     lb = sub.add_parser("library", help="list licensed sounds")
     lb.add_argument("--type", choices=("sfx", "music"))
     lb.add_argument("--tag")
+    sg = sub.add_parser("signals", help="highlight signals for a raw clip (audio peaks, scene cuts, chat)")
+    sg.add_argument("clip")
+    sg.add_argument("--recompute", action="store_true")
+    sg.add_argument("--spike", type=float, help="override the spike time (clip seconds)")
+    sg.add_argument("--out", help="write signals.json here (e.g. work/signals.json)")
+    sg.add_argument("--json", action="store_true")
+    tl = sub.add_parser("timeline", help="filmstrip with timestamps + waveform for a time range")
+    tl.add_argument("--source", required=True)
+    tl.add_argument("--from", dest="start", type=float, required=True)
+    tl.add_argument("--to", dest="end", type=float, required=True)
+    tl.add_argument("--frames", type=int, default=8)
+    tl.add_argument("--width", type=int, default=1920)
+    tl.add_argument("--wave-height", type=int, default=140)
+    tl.add_argument("--out", required=True)
+    gr = sub.add_parser("grid", help="frame with a labelled pixel grid (read facecam/HUD rectangles)")
+    gr.add_argument("--source", required=True)
+    gr.add_argument("--t", type=float, required=True)
+    gr.add_argument("--step", type=int, default=80)
+    gr.add_argument("--out", required=True)
+    rf = sub.add_parser("reframe", help="9:16 layout graph ([vcut] -> [vlay]): stack, fullcam, crop, blurfill")
+    rf.add_argument("--source", required=True)
+    rf.add_argument("layout", choices=("stack", "fullcam", "crop", "blurfill"))
+    rf.add_argument("--cam", help="facecam rectangle X,Y,W,H (source px)")
+    rf.add_argument("--game", help="gameplay rectangle for stack (default: centred crop that fills)")
+    rf.add_argument("--split", type=float, default=0.42, help="stack: facecam share of the height")
+    rf.add_argument("--game-cx", type=float, default=0.5, help="stack: gameplay centre (fraction of width)")
+    rf.add_argument("--cx", type=float, default=0.5, help="crop/blurfill: centre (fraction of width)")
+    rf.add_argument("--x", type=float, help="crop: left edge in source px")
+    rf.add_argument("--x-expr", help="crop: left edge as an expression in t (from `track`)")
+    rf.add_argument("--zoom", type=float, default=1.0)
+    rf.add_argument("--inset", action="append",
+                    help="HUD inset X,Y,W,H@PX,PY,WIDTH, e.g. the kill feed (repeatable)")
+    rf.add_argument("--preview", type=float, help="render one frame at this raw-clip time")
+    rf.add_argument("--preview-out")
+    tr = sub.add_parser("track", help="follow on-screen action -> crop-X expression")
+    tr.add_argument("--source", required=True)
+    tr.add_argument("--segments", required=True)
+    tr.add_argument("--mask", action="append", help="ignore motion here: facecam, chat box, HUD (X,Y,W,H)")
+    tr.add_argument("--zoom", type=float, default=1.0)
+    tr.add_argument("--fps", type=float, default=4.0)
+    tr.add_argument("--deadband", type=float, default=0.08, help="ignore moves smaller than this (fraction)")
+    tr.add_argument("--ease", type=float, default=0.4, help="seconds per move; 0 = hard cuts")
+    tr.add_argument("--out")
+    sn = sub.add_parser("snap", help="snap keep-list edges to word boundaries")
+    sn.add_argument("--words", required=True)
+    sn.add_argument("--segments", required=True)
+    sn.add_argument("--max-shift", type=float, default=0.35)
+    th = sub.add_parser("thumbnail", help="thumbnail / cover image from one frame, with big text")
+    th.add_argument("--source", required=True)
+    th.add_argument("--t", type=float, required=True)
+    th.add_argument("--out", required=True)
+    th.add_argument("--text", help="<= 4 words; *word* = accent colour")
+    th.add_argument("--size", default="1280x720", help="1280x720 thumbnail or 1080x1920 cover")
+    th.add_argument("--accent", default="#FFD400")
+    th.add_argument("--font", default="Arial Black")
+    th.add_argument("--font-size", type=int)
+    th.add_argument("--position", choices=("top", "bottom", "center"), default="top")
+    th.add_argument("--crop", help="crop this source rectangle X,Y,W,H first (e.g. the facecam)")
     a = ap.parse_args(argv)
     {"captions": cmd_captions, "audiomix": cmd_audiomix, "trimgraph": cmd_trimgraph,
-     "inspect": cmd_inspect, "library": cmd_library}[a.cmd](a)
+     "inspect": cmd_inspect, "library": cmd_library, "signals": cmd_signals, "timeline": cmd_timeline,
+     "grid": cmd_grid, "reframe": cmd_reframe, "track": cmd_track, "snap": cmd_snap,
+     "thumbnail": cmd_thumbnail}[a.cmd](a)
 
 
 if __name__ == "__main__":

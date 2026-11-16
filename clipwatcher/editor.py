@@ -24,7 +24,7 @@ import sys
 import time
 from pathlib import Path
 
-from . import media
+from . import export, media, signals, thumbs
 from .config import Config
 from .db import DB
 from .extractor import clip_dir
@@ -35,6 +35,7 @@ from .worker import Done, Skip
 log = logging.getLogger("edit")
 
 PLAYBOOK_PATH = Path(__file__).resolve().parent.parent / ".claude" / "skills" / "edit-short" / "SKILL.md"
+REFERENCES_DIR = PLAYBOOK_PATH.parent / "references"
 
 
 def job_dir(cfg: Config, event_id: str) -> Path:
@@ -114,6 +115,10 @@ def prepare_job(cfg: Config, event_id: str) -> Path:
     frames = "\n".join(f"- {f['t']:6.1f}s  {files['frames_dir']}/{Path(f['file']).name}  ({f['kind']})"
                        for f in meta.get("frames", [])) or "- (none)"
     chat_lines = "\n".join(_chat_excerpt(chat, spike["spike_in_clip_s"])) or "(no chat captured)"
+    sig_path, sig = _signals(cfg, raw, jdir, meta, chat)
+    files["signals"] = _rel(cfg, sig_path) if sig_path else None
+    signal_lines = "\n".join(signals.summary_lines(sig)) if sig else "- (signals unavailable)"
+    spike_text = _spike_text(spike, st)
     usable = usable_items(load_library())
     library_summary = ", ".join(it["id"] for it in usable) or "(none - run `python -m clipwatcher make-assets`)"
     brief = f"""# Editing job {event_id}
@@ -131,8 +136,9 @@ Follow the playbook in `{files['playbook']}` (read it first).
 ## Tools
 - ffmpeg: `{Path(cfg['extract']['ffmpeg']).as_posix()}`
 - ffprobe: `{Path(cfg['extract']['ffprobe']).as_posix()}`
-- Editing toolkit: `{py} -m clipwatcher.editkit` (captions, audiomix, trimgraph, inspect, library);
-  see the playbook. Licensed sounds available: {library_summary}
+- Editing toolkit: `{py} -m clipwatcher.editkit` - captions, audiomix, trimgraph, inspect, library,
+  signals, timeline, grid, reframe, track, snap, thumbnail (see the playbook and
+  `{_rel(cfg, REFERENCES_DIR)}/`). Licensed sounds available: {library_summary}
 
 ## Files (read-only inputs - never modify them)
 - Raw clip: `{files['raw_clip']}`  ({meta['clip']['media'].get('duration', 0):.1f}s, {json.dumps(meta['clip']['media'].get('video', {}))})
@@ -141,12 +147,13 @@ Follow the playbook in `{files['playbook']}` (read it first).
 - Word timings: `{files['words']}`
 - Chat around the spike: `{files['chat_context']}`
 - Frames: `{files['frames_dir']}/`
+- Highlight signals: `{files['signals']}`
 
 ## The spike
-Chat jumped at **{spike['spike_in_clip_s']:.1f}s** into the clip and peaked at **{spike['peak_in_clip_s']:.1f}s**
-({st['first_count']} msgs in {st['bucket_seconds']:.0f}s vs a baseline of {st['baseline']}, {st['first_ratio']}x;
-peak {st['peak_count']} msgs, {st['peak_ratio']}x; {st['run_buckets']} spike bucket(s)).
-Chat reacts *after* the moment - the real start is usually earlier. Decide from the footage.
+{spike_text}
+
+## Highlight signals (heuristics - confirm from the frames)
+{signal_lines}
 
 ## Frames
 {frames}
@@ -163,17 +170,57 @@ Chat reacts *after* the moment - the real start is usually earlier. Decide from 
 
 ## Deliverables in `{files['output_dir']}/`
 1. `short.mp4` - 1080x1920, H.264 + AAC, <= {max_len}s, about -14 LUFS, with your captions, motion and sound design.
-2. `edit_decisions.json` - logline, moment_type, beats, segments, in/out (clip and recording time),
-   composition, captions, effects, audio_assets (library ids), hook, revisions, rejected_alternatives.
+2. `edit_decisions.json` - logline, moment_type, highlight_score (the rubric), beats, segments,
+   in/out (clip and recording time), composition, captions, effects, audio_assets (library ids),
+   hook, thumbnail ({{"raw_t", "text", "accent"}}), revisions, rejected_alternatives.
 3. `description.txt` - 3 title options, description, the credit line for {att['streamer']}
    ({att['channel_url']}), any audio credits, and hashtags.
 Use `{files['work_dir']}/` for intermediate files.
 
-When done, run `{job['finish_command']}` and fix anything it reports.
+When done, run `{job['finish_command']}` and fix anything it reports. It also renders the
+thumbnail and cover and the platform files in `{files['output_dir']}/final/` (nothing is uploaded).
 Do not upload or publish anything.
 """
     (jdir / "EDIT_JOB.md").write_text(brief, encoding="utf-8")
     return jdir
+
+
+def _signals(cfg: Config, raw: Path, jdir: Path, meta: dict, chat: dict) -> tuple[Path | None, dict | None]:
+    """signals.json from extraction, or computed now into the job folder (raw clips are read-only)."""
+    for cand in (raw / "signals.json", jdir / "signals.json"):
+        if cand.exists():
+            try:
+                return cand, read_json(cand)
+            except ValueError:
+                pass
+    if not cfg["extract"].get("signals", True):
+        return None, None
+    sp = meta["spike"]
+    try:
+        sig = signals.analyze(cfg["extract"]["ffmpeg"], raw / "clip.mp4", chat.get("messages", []),
+                              float(sp["spike_in_clip_s"]), float(sp["peak_in_clip_s"]), sp.get("stats", {}),
+                              scenes=bool(cfg["extract"].get("scene_detect", True)))
+    except (media.MediaError, OSError, ValueError, subprocess.TimeoutExpired) as e:
+        log.warning("signals unavailable for %s: %s", meta.get("event_id"), str(e)[:200])
+        return None, None
+    write_json(jdir / "signals.json", sig)
+    return jdir / "signals.json", sig
+
+
+def _spike_text(spike: dict, st: dict) -> str:
+    also = ", ".join(sorted({d.get("source", "?") for d in st.get("also_detected_by", [])}))
+    also = f" Also detected by: {also}." if also else ""
+    if st.get("source") == "audio":
+        return (f"The **audio** got loud at **{spike['spike_in_clip_s']:.1f}s** into the clip and peaked at "
+                f"**{spike['peak_in_clip_s']:.1f}s** ({st.get('peak_lufs')} LUFS vs a 5-minute baseline of "
+                f"{st.get('baseline_lufs')} LUFS, +{st.get('rise_lu')} LU for {st.get('run_seconds')}s).{also}\n"
+                f"An audio spike is often the moment itself (a scream, a team fight, an explosion) - "
+                f"or just a loud ad/song/alert. Decide from the footage.")
+    return (f"Chat jumped at **{spike['spike_in_clip_s']:.1f}s** into the clip and peaked at "
+            f"**{spike['peak_in_clip_s']:.1f}s** ({st.get('first_count')} msgs in {st.get('bucket_seconds', 10):.0f}s "
+            f"vs a baseline of {st.get('baseline')}, {st.get('first_ratio')}x; peak {st.get('peak_count')} msgs, "
+            f"{st.get('peak_ratio')}x; {st.get('run_buckets')} spike bucket(s)).{also}\n"
+            f"Chat reacts *after* the moment - the real start is usually earlier. Decide from the footage.")
 
 
 def rejected(cfg: Config, event_id: str) -> bool:
@@ -190,6 +237,7 @@ def finish(cfg: Config, db: DB | None, event_id: str) -> list[str]:
     sdir = short_dir(cfg, event_id)
     raw_meta_path = clip_dir(cfg, event_id) / "metadata.json"
     problems: list[str] = []
+    warnings: list[str] = []
     short = sdir / "short.mp4"
     if not raw_meta_path.exists():
         return [f"no raw clip metadata for {event_id}"]
@@ -208,7 +256,9 @@ def finish(cfg: Config, db: DB | None, event_id: str) -> list[str]:
     else:
         try:
             info = media.verify_playable(cfg["extract"]["ffmpeg"], cfg["extract"]["ffprobe"], short)
-            info.update(media.loudness(cfg["extract"]["ffmpeg"], short))
+            qa = media.qa_scan(cfg["extract"]["ffmpeg"], short, info.get("duration", 0))
+            info.update({k: qa.pop(k) for k in ("lufs", "true_peak_db", "lra") if k in qa})
+            info["qa"] = qa
         except media.MediaError as e:
             problems.append(f"short.mp4 is not a complete, playable video: {e}")
         v, a, dur = info.get("video"), info.get("audio"), info.get("duration", 0)
@@ -228,6 +278,9 @@ def finish(cfg: Config, db: DB | None, event_id: str) -> list[str]:
             problems.append(f"loudness is {lufs} LUFS; mix to about -14 (editkit audiomix does this)")
         if tp is not None and tp > -0.5:
             problems.append(f"true peak is {tp} dB; keep it at or below -1 dB")
+        p2, w2 = _qa_rules(info)
+        problems += p2
+        warnings += w2
     desc_text = ""
     desc = sdir / "description.txt"
     if not desc.exists():
@@ -261,6 +314,7 @@ def finish(cfg: Config, db: DB | None, event_id: str) -> list[str]:
                 problems.append(f"description.txt must include the credit for {aid}: {item['credit']!r}")
 
     if not problems:
+        final = _finalize(cfg, event_id, sdir, short, dec if isinstance(dec, dict) else {}, warnings)
         write_json(sdir / "metadata.json", {
             "event_id": event_id,
             "attribution": att,
@@ -272,6 +326,12 @@ def finish(cfg: Config, db: DB | None, event_id: str) -> list[str]:
             "spike": raw_meta["spike"],
             "short": info,
             "audio_assets": audio_used,
+            "detection": raw_meta.get("detection"),
+            "signals": raw_meta.get("signals"),
+            "highlight_score": dec.get("highlight_score") if isinstance(dec, dict) else None,
+            "moment_type": dec.get("moment_type") if isinstance(dec, dict) else None,
+            "final": final,
+            "qa": {"warnings": warnings},
             "raw_clip": _rel(cfg, clip_dir(cfg, event_id) / "clip.mp4"),
             "published": False,
             "finished_utc": utc_iso(time.time()),
@@ -282,6 +342,88 @@ def finish(cfg: Config, db: DB | None, event_id: str) -> list[str]:
                 db.complete(row["id"], {"short": str(short)}, status="done", note="finished",
                             next_stage="archive")
     return problems
+
+
+def _qa_rules(info: dict) -> tuple[list[str], list[str]]:
+    """Hard problems and soft warnings from the render's QA scan."""
+    problems, warnings = [], []
+    v, qa = info.get("video") or {}, info.get("qa") or {}
+    if v and (v.get("width"), v.get("height")) != (1080, 1920):
+        problems.append(f"short.mp4 is {v.get('width')}x{v.get('height')}; render at exactly 1080x1920")
+    if v and v.get("codec") != "h264":
+        problems.append(f"video codec is {v.get('codec')}; use libx264 (every platform accepts H.264)")
+    if v and v.get("pix_fmt") not in (None, "yuv420p"):
+        problems.append(f"pixel format is {v.get('pix_fmt')}; add -pix_fmt yuv420p")
+    if v and media.fps_value(v.get("fps")) > 60.5:
+        problems.append(f"frame rate {media.fps_value(v.get('fps')):.1f} is over 60")
+    for a, b in qa.get("black", []):
+        if a < 0.05:
+            problems.append(f"the Short opens on a black frame ({a:.2f}-{b:.2f}s); the first frame is the hook")
+        elif b - a >= 1.0:
+            problems.append(f"{b - a:.1f}s of black at {a:.1f}s")
+        else:
+            warnings.append(f"short black flash {a:.2f}-{b:.2f}s (fine if intended)")
+    for a, b in qa.get("frozen", []):
+        if b - a >= 2.5:
+            problems.append(f"picture frozen for {b - a:.1f}s at {a:.1f}s (freeze-frames should be <= 1.5s)")
+        elif b - a >= 1.0:
+            warnings.append(f"picture still for {b - a:.1f}s at {a:.1f}s (fine for a freeze-frame or a menu)")
+    for a, b in qa.get("silent", []):
+        if b - a >= 1.5:
+            warnings.append(f"near-silence for {b - a:.1f}s at {a:.1f}s")
+    return problems, warnings
+
+
+def _finalize(cfg: Config, event_id: str, sdir: Path, short: Path, dec: dict, warnings: list[str]) -> dict:
+    """Thumbnail, cover and platform files in final/. Failures here are warnings, never a lost edit."""
+    x = cfg["export"]
+    if not x.get("enabled", True):
+        return {"dir": None, "note": "export disabled"}
+    out: dict = {"dir": "final"}
+    final = sdir / "final"
+    ff, fp = cfg["extract"]["ffmpeg"], cfg["extract"]["ffprobe"]
+    final.mkdir(parents=True, exist_ok=True)
+    if x.get("thumbnail", True):
+        th = dec.get("thumbnail") if isinstance(dec.get("thumbnail"), dict) else {}
+        raw_clip = clip_dir(cfg, event_id) / "clip.mp4"
+        sig = {}
+        for cand in (clip_dir(cfg, event_id) / "signals.json", job_dir(cfg, event_id) / "signals.json"):
+            if cand.exists():
+                try:
+                    sig = read_json(cand)
+                    break
+                except ValueError:
+                    pass
+        raw_t = th.get("raw_t", (sig.get("moment_guess") or {}).get("t"))
+        made_after = max(short.stat().st_mtime, (sdir / "edit_decisions.json").stat().st_mtime)
+        jobs = [("thumbnail.jpg", raw_clip, raw_t, (1280, 720), th.get("text", ""), th.get("crop")),
+                ("cover.jpg", short, th.get("cover_t", 0.0), (1080, 1920), th.get("cover_text", ""), None)]
+        for name, src, t, size, text, crop_rect in jobs:
+            dst = final / name
+            key = name.split(".")[0]
+            try:
+                if not (dst.exists() and dst.stat().st_mtime >= made_after):
+                    if t is None:
+                        raise ValueError("no thumbnail time in edit_decisions.json (thumbnail.raw_t)")
+                    thumbs.render(ff, src, float(t), dst, size, text, th.get("accent", "#FFD400"),
+                                  th.get("font", "Arial Black"), None, th.get("position", "top"), crop_rect)
+                bad = thumbs.check(fp, dst, size)
+                warnings.extend(bad)
+                out[key] = None if bad else f"final/{name}"
+            except (media.MediaError, OSError, ValueError, TypeError) as e:
+                warnings.append(f"{name} not made: {str(e)[:200]}")
+                out[key] = None
+    try:
+        manifest = export.export_all(cfg, short, final)
+        out["platforms"] = {k: {"status": v.get("status"), "file": v.get("file")}
+                            for k, v in manifest["platforms"].items()}
+        for k, v in manifest["platforms"].items():
+            if v.get("status") != "ok":
+                warnings.append(f"{k} export {v.get('status')}: "
+                                f"{'; '.join(v.get('reasons') or [v.get('error', '')])}")
+    except (media.MediaError, OSError, ValueError) as e:
+        warnings.append(f"platform export failed: {str(e)[:200]}")
+    return out
 
 
 def _claude_cmd(cfg: Config) -> list[str]:

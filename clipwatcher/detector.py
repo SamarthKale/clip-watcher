@@ -220,6 +220,7 @@ def detect_forever(cfg: Config, db: DB) -> None:
     det = SpikeDetector(channel, cfg["detect"])
     det.cooldown_until = float(state.get("cooldown_until", 0.0))
     last_save = 0.0
+    merge = float(cfg["detect"]["merge_window_seconds"])
     log.info("watching %s (threshold %.1fx, %ds buckets, %ds baseline)", path,
              det.threshold, det.B, det.window * det.B)
 
@@ -234,7 +235,8 @@ def detect_forever(cfg: Config, db: DB) -> None:
         progressed = False
         for line_off, nxt, rec in read_records(path, offset):
             for ev in det.feed(rec, line_off):
-                if db.add_event(ev.event_id, ev.channel, ev.spike_ts, ev.peak_ts, ev.stats):
+                if db.add_event(ev.event_id, ev.channel, ev.spike_ts, ev.peak_ts, ev.stats,
+                                merge_window=merge):
                     log.info("SPIKE %s at %s: %d msgs vs baseline %.1f (%.1fx), peak %d",
                              ev.event_id, utc_iso(ev.spike_ts), ev.stats["first_count"],
                              ev.stats["baseline"], ev.stats["first_ratio"], ev.stats["peak_count"])

@@ -13,16 +13,19 @@ Output per event, in raw_clips/<event_id>/:
   metadata.json       attribution, source timestamps, spike statistics
   chat_context.json   chat messages around the spike, with clip-relative times
   frames/             representative stills (every N seconds + spike + peak)
+  signals.json        highlight signals: loudness peaks, silences, scene changes,
+                      chat emote categories, moment guess and a triage score
 """
 from __future__ import annotations
 
 import json
 import logging
 import os
+import subprocess
 import time
 from pathlib import Path
 
-from . import media
+from . import media, signals
 from .chat import chat_log_path, read_window
 from .config import Config
 from .db import DB
@@ -138,8 +141,19 @@ def handle(cfg: Config, db: DB, job) -> Done | Defer | Skip:
         "messages": msgs,
     })
 
+    sig = None
+    if x.get("signals", True):
+        try:
+            sig = signals.analyze(x["ffmpeg"], clip, msgs, spike_in_clip, peak_in_clip, stats,
+                                  scenes=bool(x.get("scene_detect", True)))
+            write_json(out_dir / "signals.json", sig)
+        except (media.MediaError, OSError, ValueError, subprocess.TimeoutExpired) as e:
+            log.warning("signal analysis failed for %s (clip is fine): %s", ev["id"], str(e)[:300])
+
     meta = {
         "event_id": ev["id"],
+        "detection": {"source": stats.get("source", "chat"), "algorithm": stats.get("algorithm"),
+                      "also_detected_by": [d.get("source") for d in stats.get("also_detected_by", [])]},
         "attribution": {
             "streamer": cfg.display_name if channel == cfg.channel else channel,
             "channel": channel,
@@ -179,6 +193,9 @@ def handle(cfg: Config, db: DB, job) -> Done | Defer | Skip:
             "media": media.summarize(info),
         },
         "frames": frames,
+        "signals": {"file": "signals.json", "triage_score": sig["triage"]["score"],
+                    "moment_guess_s": sig["moment_guess"]["t"],
+                    "suggested_moment": sig["suggested_moment"]} if sig else None,
         "chat_messages_in_context": len(msgs),
         "extracted_utc": utc_iso(time.time()),
     }

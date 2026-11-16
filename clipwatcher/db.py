@@ -149,9 +149,31 @@ class DB:
 
     # ------------------------------------------------------------ events
     def add_event(self, event_id: str, channel: str, spike_ts: float, peak_ts: float,
-                  stats: dict) -> bool:
-        """Insert an event and its extract job. Returns False if it already existed."""
+                  stats: dict, merge_window: float = 0.0) -> bool:
+        """Insert an event and its extract job. Returns False if it already existed.
+
+        With merge_window > 0, a spike from a *different* detector (stats["source"]:
+        "chat" when absent, "audio", ...) within that many seconds of an existing event
+        is the same moment: it is recorded on that event ("also_detected_by") instead of
+        creating a second clip. Events from the same detector never merge, so the chat
+        detector's behaviour is unchanged when it is the only one running.
+        """
         with self.tx() as c:
+            if merge_window > 0:
+                src = stats.get("source", "chat")
+                for r in c.execute("SELECT id, stats FROM events WHERE channel=? AND spike_ts BETWEEN ? AND ? "
+                                   "ORDER BY ABS(spike_ts - ?)",
+                                   (channel, spike_ts - merge_window, spike_ts + merge_window, spike_ts)):
+                    other = json.loads(r["stats"])
+                    if other.get("source", "chat") == src:
+                        continue
+                    seen = other.setdefault("also_detected_by", [])
+                    if not any(x.get("source") == src and abs(float(x.get("spike_ts", 0)) - spike_ts) < 1
+                               for x in seen):
+                        seen.append({"source": src, "spike_ts": spike_ts, "peak_ts": peak_ts,
+                                     **{k: v for k, v in stats.items() if k != "buckets"}})
+                        c.execute("UPDATE events SET stats=? WHERE id=?", (json.dumps(other), r["id"]))
+                    return False
             cur = c.execute("INSERT OR IGNORE INTO events(id, channel, spike_ts, peak_ts, stats, created) "
                             "VALUES(?, ?, ?, ?, ?, ?)",
                             (event_id, channel, spike_ts, peak_ts, json.dumps(stats), time.time()))

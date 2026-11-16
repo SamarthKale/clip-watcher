@@ -6,8 +6,9 @@ which edits it into a vertical YouTube Short.
 
 ```
 live stream -> recording (streamlink) -> chat log (Twitch IRC) -> 10 s chat buckets
-  -> 3x rolling-average spike -> raw footage (60 s before + 60 s after) -> transcript (whisper.cpp)
-  -> Claude Code edit -> finished Short (Edited Clips)
+  -> 3x rolling-average spike [+ optional audio-loudness spike] -> raw footage (60 s + 60 s)
+  -> highlight signals (audio peaks, scene cuts, chat emotes) -> transcript (whisper.cpp)
+  -> Claude Code edit (gaming skill pack) -> QA -> Short + thumbnail + cover + platform files
   -> verified backup of raw clips (external drive) -> safe cleanup of recordings
 ```
 
@@ -30,6 +31,9 @@ live stream -> recording (streamlink) -> chat log (Twitch IRC) -> 10 s chat buck
   session, source timestamps and event ID.
 - **Original sound library.** The included sound effects and music are synthesized from scratch and
   licensed CC0. The editor can use only assets with a known license.
+- **Gaming & livestream skill pack.** Highlight signals, an optional audio trigger, 9:16 layouts for
+  facecam + gameplay with HUD insets, action tracking, thumbnails, platform files and automated QA.
+  See [Gaming skill pack](#gaming-skill-pack) and [docs/skill-pack.md](docs/skill-pack.md).
 
 ## Requirements
 
@@ -65,13 +69,14 @@ fixed time, use `--for 600` (seconds).
 |---|---|
 | `run` | Runs all stages, supervised (`--for N` stops gracefully after N seconds) |
 | `record`, `chat`, `detect` | Run steps 1–3 on their own |
+| `audiodetect` | Optional audio-spike trigger (`run` starts it when `detect.audio.enabled = true`) |
 | `extract`, `transcribe`, `edit`, `storage` | Run the queue workers for steps 4–7 |
 | `status` | Sessions, queue counts, recent jobs, errors and storage state |
 | `check` | Verify tools, storage drives and the sound library |
 | `retry <event_id> <stage>` | Re-queue a failed or skipped job |
 | `detect-file <chat.log>` | Run the detector over an existing log (`--enqueue` queues the results) |
 | `next-edit` | List editing jobs waiting for a manual Claude session |
-| `finish <event_id>` | Validate a Short and write its attribution metadata |
+| `finish <event_id>` | Validate a Short (QA), write its attribution metadata, render the thumbnail and cover and the platform files |
 | `make-assets` | Generate or re-index the sound library (`--force` regenerates) |
 
 ## Configuration
@@ -89,6 +94,8 @@ Copy `config.example.toml` to `config.toml`. Every key is optional, and the defa
 | `[edit]` | `mode`, `max_short_seconds` | `claude` for automatic edits, `manual` for `/edit-short` |
 | `[storage]` | `raw_clips_dir`, `recordings_archive_dir` | External-drive folders. Leave empty to keep everything local. |
 | `[sync]` | `chat_offset_seconds` | Shift chat onto the video timeline if you measure a drift |
+| `[detect.audio]` | `enabled`, `rise_lu` | Optional loudness trigger (off by default; +12 LU ≈ a scream) |
+| `[export]` | `platforms`, `thumbnail` | Platform files and thumbnail/cover made by `finish` (nothing is uploaded) |
 
 Tool paths can be set in `config.toml` if they are not on your PATH: `record.streamlink`,
 `extract.ffmpeg`, `extract.ffprobe`, `transcribe.whisper_cli`.
@@ -148,15 +155,66 @@ Each numbered step is a separate process with its own queue. The queues live in
    If the external drive is unplugged, everything waits and nothing is deleted. Every move and
    deletion is recorded in the `storage_log` table.
 
+## Gaming skill pack
+
+The editor is a Shorts specialist for Twitch and YouTube gaming content. The playbook is
+[`.claude/skills/edit-short/SKILL.md`](.claude/skills/edit-short/SKILL.md), plus three modules in
+`references/`: highlight analysis, gaming reframing and finishing.
+
+**Finding the moment.** Chat reacts 2–10 seconds *after* something happens. So every raw clip gets
+`signals.json`:
+- loudness peaks, often the kill, the scream or the explosion;
+- silences, which are natural cut points;
+- scene changes: killcams, death screens, round ends;
+- what chat is saying: funny, hype, play (kills, aces, clutches), fail, rage, shock, wholesome, and
+  "clip it" calls;
+- a moment guess and a 0–100 triage score.
+
+Claude then confirms the moment visually (kill feed, ace banner, 1vX portraits, the facecam) and
+scores it. The score weighs hook, standalone clarity, emotion, payoff and gameplay readability, and
+anything under 50 is rejected.
+
+**Optional audio trigger.** `[detect.audio] enabled = true` adds a second detector. It applies the
+same rolling-average idea to loudness in the live recording, so it catches moments chat misses. A
+spike within 45 s of a chat spike is recorded on that event, so there is one clip, not two. It is
+off by default because game audio, ability sounds and alerts are loud too, and every event costs a
+Claude edit.
+
+**Editing tools** (`python -m clipwatcher.editkit ...`):
+
+| Tool | Purpose |
+|---|---|
+| `signals` | Show or recompute a clip's highlight signals |
+| `timeline` | Filmstrip with timestamps above the waveform for any time range |
+| `grid` | Frame with a labelled pixel grid, to measure the facecam and HUD |
+| `reframe` | 9:16 layouts (`stack`, `fullcam`, `crop`, `blurfill`), HUD insets (`--inset`), one-frame preview |
+| `track` | CV-free action following that returns a crop-X expression (not for first-person shooters) |
+| `snap` | Moves cut points off mid-word edges |
+| `audiomix --enhance` | Voice polish: denoise, then high-pass, compression and EQ, mixed to -14 LUFS |
+| `thumbnail` | 1280×720 thumbnail or 1080×1920 cover with big accent text |
+| `inspect` | Decode, loudness, black, frozen and silent spans, contact sheet |
+
+**Finishing.** `finish` is the automated QA gate. It checks that the Short:
+- decodes fully;
+- is exactly 1080×1920 H.264 yuv420p at ≤ 60 fps;
+- is between -17 and -11 LUFS with true peak ≤ -0.5 dB;
+- doesn't open on black and has no long frozen or black stretches;
+- credits the streamer and any licensed audio.
+
+It then writes `final/` with the thumbnail, the cover, `manifest.json` and `UPLOAD.txt`. The master
+is reused for every platform whose spec it already meets, and only what is out of spec is
+re-encoded. For Reels that's usually just the audio, down to 128 kbps.
+
 ## Output layout
 
 ```
 <external>\Raw Cut Clips\<streamer>\<date>\<event>\     raw clips, verified backups
-    clip.mp4, metadata.json, transcript*.srt, words.json, chat_context.json, frames\,
+    clip.mp4, metadata.json, signals.json, transcript*.srt, words.json, chat_context.json, frames\,
     checksums.sha256, editor_outcome.json (if the edit was rejected or failed)
 <external>\Recordings\<streamer>\<session>.ts          recordings with no clips (kept)
 <project>\Edited Clips\<streamer>\<date>\<event>\      finished Shorts only
     short.mp4, edit_decisions.json, description.txt, metadata.json, edit_log.json
+    final\  thumbnail.jpg, cover.jpg, platform files, manifest.json, UPLOAD.txt
 <project>\data\                                        working area, safe to clear once backed up
     recordings\, chat\, raw_clips\, jobs\, logs\, clipwatcher.db
 ```
@@ -192,8 +250,10 @@ policies and copyright law, especially for music.
 ## Project layout
 
 ```
-clipwatcher/      the pipeline (one module per stage, plus db, storage, editkit, soundlib)
-.claude/skills/   the edit-short playbook that Claude Code follows
+clipwatcher/      the pipeline (one module per stage, plus db, storage, editkit, soundlib,
+                  signals, audio_detector, reframe, thumbs, export)
+.claude/skills/   the edit-short playbook that Claude Code follows, with references/
+docs/             skill-pack.md: the gaming skill pack and how each reference skill was used
 assets/           generated sound library (library.json is local and gitignored)
 tests/            unit and integration tests
 config.example.toml
@@ -210,5 +270,9 @@ Integration tests need `ffmpeg` and `ffprobe` and are skipped without them.
 ## Status
 
 Tested live on Twitch: recording, chat capture, spike detection, extraction, transcription, Claude
-edits and storage backups with verification. Not yet tested live: the low-disk rollover during a
-real stream, and recordings that contain an ad break. Both are covered by unit tests only.
+edits and storage backups with verification. The gaming pack's tools ran end to end on real Valorant
+footage: signals, layouts, tracking, thumbnails, QA and platform files, plus the audio trigger over a
+full recording. Not yet tested live: the low-disk rollover during a real stream, recordings that
+contain an ad break, a full Claude edit using the new playbook modules, and the audio trigger
+following a recording that is still being written. All are covered by unit or integration tests
+only.

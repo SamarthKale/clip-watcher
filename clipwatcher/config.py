@@ -79,6 +79,24 @@ DEFAULTS: dict[str, Any] = {
         "cooldown_seconds": 90,  # no new event this soon after the previous one ended
         "max_run_buckets": 6,  # force-emit an event after this many consecutive spike buckets
         "gap_seconds": 20,  # silence in chat.log longer than this = monitoring gap
+        # A spike from a different detector (audio) this close to an existing event is the
+        # same moment and is recorded on it instead of cutting a second clip.
+        "merge_window_seconds": 45,
+        # Optional second trigger: loudness spikes in the recording (screams, explosions).
+        # Off by default - the chat detector above stays the default trigger.
+        "audio": {
+            "enabled": False,
+            "rise_lu": 12.0,  # spike when a second is this many LU above the baseline (12 ~ a scream)
+            "floor_lufs": -24.0,  # ...and at least this loud
+            "window_seconds": 300,  # rolling baseline: mean of the previous 5 minutes
+            "min_history_seconds": 120,
+            "min_seconds": 2,  # sustained at least this long (filters single gunshots)
+            "max_run_seconds": 10,
+            "cooldown_seconds": 90,
+            "gap_seconds": 5,
+            "chunk_seconds": 30,  # how much new recording to scan at a time
+            "safety_seconds": 10,  # stay this far behind the live edge of the file
+        },
     },
     "sync": {
         # Added to a chat timestamp to place it on the recording timeline.
@@ -94,6 +112,10 @@ DEFAULTS: dict[str, Any] = {
         "frames_every_seconds": 10,
         "frame_width": 640,
         "chat_context_seconds": 60,  # chat saved on each side of the spike
+        # signals.json: loudness peaks, silences, scene changes, chat emote categories and a
+        # triage score - helps the editor find the exact moment and its type.
+        "signals": True,
+        "scene_detect": True,
     },
     "transcribe": {
         "enabled": True,
@@ -116,6 +138,13 @@ DEFAULTS: dict[str, Any] = {
         ],
         "extra_args": [],
         "max_short_seconds": 60,
+    },
+    "export": {
+        # Platform files written by `finish` into <Short>/final/. The master short.mp4 is
+        # reused whenever it already meets a platform's spec (no duplicate, no re-encode).
+        "enabled": True,
+        "platforms": ["youtube_shorts", "tiktok", "instagram_reels"],
+        "thumbnail": True,  # thumbnail.jpg (1280x720) + cover.jpg (1080x1920)
     },
     "queue": {
         "max_attempts": 4,
@@ -152,6 +181,7 @@ def _merge(base: dict, override: dict) -> dict:
 class Config:
     raw: dict[str, Any]
     root: Path  # directory paths are resolved against
+    source: Path | None = None  # the TOML file that was loaded, if any
     source: Path | None = None  # the TOML file that was loaded, if any
 
     def __getitem__(self, key: str) -> Any:
