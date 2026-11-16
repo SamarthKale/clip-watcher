@@ -124,9 +124,11 @@ def prepare_job(cfg: Config, event_id: str) -> Path:
     target = int(cfg["edit"].get("target_short_seconds") or 0)
     length_hint = ""
     if target:
-        length_hint = (f"\n   Aim for roughly {target}s (never over {max_len}s): keep the build-up, the reaction\n"
-                       "   and the aftermath that make it a complete story, and only cut dead air. A Short\n"
-                       "   under 30s is only right when the footage truly has nothing more worth keeping.")
+        min_len = int(cfg["edit"].get("min_short_seconds") or 0)
+        length_hint = (f"\n   LENGTH: aim for about {target}s (between {max(min_len, 50)}s and {max_len}s is the sweet spot).\n"
+                       f"   Never under {min_len}s and never over {max_len}s; `finish` rejects anything outside.\n"
+                       "   This overrides the playbook's per-type durations. Reach the length with real footage:\n"
+                       "   the set-up, the moment, the reaction and the aftermath. Never pad, loop, freeze or slow down.")
     render_all_section = ""
     if cfg["edit"].get("render_all"):
         render_all_section = (
@@ -290,6 +292,10 @@ def finish(cfg: Config, db: DB | None, event_id: str) -> list[str]:
             problems.append(f"short.mp4 is {dur:.1f}s, limit is {max_len:.0f}s")
         if info and dur < 3:
             problems.append(f"short.mp4 is only {dur:.1f}s")
+        min_len = float(cfg["edit"].get("min_short_seconds") or 0)
+        if info and min_len and 3 <= dur < min_len:
+            problems.append(f"short.mp4 is {dur:.1f}s, minimum is {min_len:.0f}s: add the real set-up and "
+                            f"aftermath from the raw clip (aim for about {cfg['edit'].get('target_short_seconds') or 55}s)")
         lufs, tp = info.get("lufs"), info.get("true_peak_db")
         if lufs is not None and not (-17.0 <= lufs <= -11.0):
             problems.append(f"loudness is {lufs} LUFS; mix to about -14 (editkit audiomix does this)")

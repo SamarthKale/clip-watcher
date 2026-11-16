@@ -122,8 +122,11 @@ viewer should feel*.
   silence).
 - Cut on words, not mid-word. Snap segment edges to word boundaries ± 0.05 s.
 - Don't reorder events so they change meaning. A flash-forward hook that is clearly a teaser is fine.
-- Target durations: FUNNY/FAIL 12–30 s · HYPE 15–35 s · STORY 25–55 s · never over `max_seconds`.
-  Shorter is better if nothing is lost.
+- Target duration for EVERY moment type: **50–60 s, ideally about 55 s**, and never over
+  `max_seconds`. Never under the job's minimum (EDIT_JOB.md states it; `finish` enforces it).
+  Get the length from real footage: the set-up, the moment, the reaction and the aftermath from
+  the raw clip. Never pad with loops, freeze frames, slow-motion or repeats. Cut dead air, filler
+  and false starts, but keep the context that makes it a complete story.
 
 ## 4. Frame it (1080×1920; details: `references/gaming-reframe.md`)
 Measure the facecam and HUD with `editkit grid`, then build each beat's layout with

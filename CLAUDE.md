@@ -14,7 +14,7 @@ ffmpeg/ffprobe, whisper.cpp (`whisper-cli`) and Claude Code.
    flags buckets at ≥3x, and queues events. The optional `audiodetect` stage (`audio_detector.py`, off
    by default) does the same on recording loudness. A spike near an existing event from another
    detector is merged into it (`db.add_event(merge_window=...)`).
-4. `extract`: `extractor.py` stream-copies 60 s before and 60 s after the spike into
+4. `extract`: `extractor.py` stream-copies 75 s before and 75 s after the spike into
    `data/raw_clips/<event>/`, along with frames, chat context, metadata and `signals.json`
    (`signals.py`: loudness peaks, silences, scene changes, chat categories, triage score).
 5. `transcribe`: `transcriber.py` runs whisper.cpp and writes SRTs (clip- and recording-relative)

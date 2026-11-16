@@ -106,8 +106,8 @@ DEFAULTS: dict[str, Any] = {
     "extract": {
         "ffmpeg": "ffmpeg",
         "ffprobe": "ffprobe",
-        "pre_seconds": 60,
-        "post_seconds": 60,
+        "pre_seconds": 75,
+        "post_seconds": 75,
         "safety_seconds": 10,  # extra footage to wait for past the window end
         "frames_every_seconds": 10,
         "frame_width": 640,
@@ -145,6 +145,8 @@ DEFAULTS: dict[str, Any] = {
         # Aim for about this length when the footage supports it (0 = no preference). The hard
         # limit stays max_short_seconds.
         "target_short_seconds": 0,
+        # finish rejects a Short shorter than this (0 = no minimum)
+        "min_short_seconds": 0,
         # true: never reject a clip for a low score or "no real moment" - always render the best
         # Short the footage allows (edits run highest triage score first). Safety and copyright
         # rejections still apply.

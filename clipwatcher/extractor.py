@@ -3,7 +3,7 @@
 Original reference:  ffmpeg -ss START -i recordings/stream.ts -t DURATION -c copy raw_clips/clip.mp4
 
 The window is pre_seconds before and post_seconds after the spike (default
-60 + 60) so the editor has enough context to find where the moment really
+75 + 75) so the editor has enough context to find where the moment really
 starts - the spike is when chat reacted, not when the moment began. Footage is
 stream-copied (no re-encode, audio intact). The source recording is only ever
 read, never modified.
