@@ -43,10 +43,13 @@ def summarize(info: dict) -> dict:
     for s in info.get("streams", []):
         if s.get("codec_type") == "video" and "video" not in out:
             out["video"] = {"codec": s.get("codec_name"), "width": s.get("width"),
-                            "height": s.get("height"), "fps": s.get("avg_frame_rate")}
+                            "height": s.get("height"), "fps": s.get("avg_frame_rate"),
+                            "pix_fmt": s.get("pix_fmt"), "profile": s.get("profile"),
+                            "bit_rate": int(s["bit_rate"]) if str(s.get("bit_rate", "")).isdigit() else None}
         elif s.get("codec_type") == "audio" and "audio" not in out:
             out["audio"] = {"codec": s.get("codec_name"), "sample_rate": s.get("sample_rate"),
-                            "channels": s.get("channels")}
+                            "channels": s.get("channels"),
+                            "bit_rate": int(s["bit_rate"]) if str(s.get("bit_rate", "")).isdigit() else None}
     return out
 
 
@@ -84,6 +87,59 @@ def loudness(ffmpeg: str, path: Path) -> dict:
                           encoding="utf-8", errors="replace", timeout=600)
     text = proc.stderr or ""
     out = {}
+    for key, pat in (("lufs", r"I:\s+(-?[\d.]+) LUFS"), ("true_peak_db", r"Peak:\s+(-?[\d.]+) dBFS"),
+                     ("lra", r"LRA:\s+(-?[\d.]+) LU")):
+        found = re.findall(pat, text)
+        if found:
+            out[key] = float(found[-1])
+    return out
+
+
+def fps_value(rate: str | None) -> float:
+    """'30000/1001' -> 29.97"""
+    try:
+        n, _, d = str(rate or "0").partition("/")
+        return float(n) / float(d or 1) if float(d or 1) else 0.0
+    except ValueError:
+        return 0.0
+
+
+_BLACK = re.compile(r"black_start:\s*([\d.]+)\s+black_end:\s*([\d.]+)")
+_FREEZE_START = re.compile(r"freeze_start:\s*([\d.]+)")
+_FREEZE_END = re.compile(r"freeze_end:\s*([\d.]+)")
+_SIL_START = re.compile(r"silence_start:\s*(-?[\d.]+)")
+_SIL_END = re.compile(r"silence_end:\s*([\d.]+)")
+
+
+def _spans(text: str, start_re: re.Pattern, end_re: re.Pattern, total: float) -> list[list[float]]:
+    out, cur = [], None
+    for line in text.splitlines():
+        if (m := start_re.search(line)):
+            cur = max(0.0, float(m.group(1)))
+        elif (m := end_re.search(line)) and cur is not None:
+            out.append([round(cur, 2), round(float(m.group(1)), 2)])
+            cur = None
+    if cur is not None:
+        out.append([round(cur, 2), round(total, 2)])
+    return out
+
+
+def qa_scan(ffmpeg: str, path: Path, total: float) -> dict:
+    """One decode pass over a finished render: black frames, frozen picture, silent
+    stretches and loudness (integrated LUFS, true peak, LRA)."""
+    proc = subprocess.run([ffmpeg, "-hide_banner", "-nostdin", "-i", str(path),
+                           "-vf", "blackdetect=d=0.1:pix_th=0.10,freezedetect=n=-60dB:d=0.6",
+                           "-af", "silencedetect=noise=-50dB:d=1.0,ebur128=peak=true",
+                           "-f", "null", "-"], capture_output=True, text=True, encoding="utf-8",
+                          errors="replace", timeout=1800)
+    text = proc.stderr or ""
+    if proc.returncode != 0:
+        raise MediaError(f"QA scan of {path} failed: {text[-800:]}")
+    out: dict = {
+        "black": [[round(float(a), 2), round(float(b), 2)] for a, b in _BLACK.findall(text)],
+        "frozen": _spans(text, _FREEZE_START, _FREEZE_END, total),
+        "silent": _spans(text, _SIL_START, _SIL_END, total),
+    }
     for key, pat in (("lufs", r"I:\s+(-?[\d.]+) LUFS"), ("true_peak_db", r"Peak:\s+(-?[\d.]+) dBFS"),
                      ("lra", r"LRA:\s+(-?[\d.]+) LU")):
         found = re.findall(pat, text)

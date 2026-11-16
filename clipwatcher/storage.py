@@ -2,9 +2,11 @@
 
 Layout
   Raw Cut Clips (external drive)  <raw_clips_dir>/<streamer>/<YYYY-MM-DD>/<event>/
-      clip.mp4, metadata.json, transcripts, words.json, chat_context.json, frames/, checksums.sha256
+      clip.mp4, metadata.json, transcripts, words.json, chat_context.json, signals.json, frames/,
+      checksums.sha256
   Edited Clips (internal drive)   <edited_dir>/<streamer>/<YYYY-MM-DD>/<event>/
-      short.mp4, edit_decisions.json, description.txt, metadata.json, edit_log.json
+      short.mp4, edit_decisions.json, description.txt, metadata.json, edit_log.json,
+      final/ (thumbnail.jpg, cover.jpg, platform files, manifest.json, UPLOAD.txt)
   Recordings with no clips        <recordings_archive_dir>/<streamer>/<session>.ts  (kept)
 
 Everything is produced on the internal drive first. Per event, once its edit is

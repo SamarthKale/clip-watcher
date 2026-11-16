@@ -16,7 +16,7 @@ from .config import load_config
 from .db import DB
 from .util import STOP, install_stop_handlers, setup_logging, utc_iso, which
 
-STAGE_PROCESSES = ("record", "chat", "detect", "extract", "transcribe", "edit", "storage")
+STAGE_PROCESSES = ("record", "chat", "detect", "audiodetect", "extract", "transcribe", "edit", "storage")
 
 
 def _common(p: argparse.ArgumentParser) -> None:
@@ -36,6 +36,7 @@ def build_parser() -> argparse.ArgumentParser:
         ("record", "STEP 1: record the channel with streamlink"),
         ("chat", "STEP 2: read Twitch chat into chat.log"),
         ("detect", "STEP 3: detect chat spikes and queue events"),
+        ("audiodetect", "STEP 3b (optional): detect loudness spikes in the recording"),
         ("extract", "STEP 4: extract raw footage for queued events"),
         ("transcribe", "STEP 5: transcribe raw clips with whisper.cpp"),
         ("edit", "STEP 6: build editing jobs and run Claude Code on them"),
@@ -64,7 +65,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    needs_channel = args.cmd in ("run", "record", "chat", "detect")
+    needs_channel = args.cmd in ("run", "record", "chat", "detect", "audiodetect")
     try:
         cfg = load_config(args.config, {"channel": args.channel}, require_channel=needs_channel)
     except (ValueError, FileNotFoundError) as e:
@@ -95,6 +96,11 @@ def cmd_chat(cfg, db, args):
 def cmd_detect(cfg, db, args):
     from .detector import detect_forever
     detect_forever(cfg, db)
+
+
+def cmd_audiodetect(cfg, db, args):
+    from .audio_detector import audio_detect_forever
+    audio_detect_forever(cfg, db)
 
 
 def cmd_extract(cfg, db, args):
@@ -135,6 +141,8 @@ def cmd_run(cfg, db, args):
     stages = list(STAGE_PROCESSES)
     if not cfg["transcribe"]["enabled"]:
         stages.remove("transcribe")
+    if not cfg["detect"]["audio"]["enabled"]:  # optional second trigger, off by default
+        stages.remove("audiodetect")
     base = [sys.executable, "-m", "clipwatcher"]
     config_arg = str(Path(args.config).resolve())
     extra = ["--config", config_arg, "--channel", cfg.channel] + (["-v"] if args.verbose else [])
@@ -242,6 +250,19 @@ def cmd_finish(cfg, db, args):
             print(f"  - {p}")
         return 1
     print(f"OK - {args.event_id} saved with attribution metadata (not published)")
+    from .editor import short_dir
+    from .util import read_json
+    meta_path = short_dir(cfg, args.event_id) / "metadata.json"
+    if meta_path.exists():
+        meta = read_json(meta_path)
+        final = meta.get("final") or {}
+        for k in ("thumbnail", "cover"):
+            if final.get(k):
+                print(f"  {k:<16} {final[k]}")
+        for name, e in (final.get("platforms") or {}).items():
+            print(f"  {name:<16} {e.get('status')}: {e.get('file') or '-'}")
+        for w in (meta.get("qa") or {}).get("warnings", []):
+            print(f"  warning: {w}")
     return 0
 
 
@@ -312,5 +333,5 @@ COMMANDS = {
     "extract": cmd_extract, "transcribe": cmd_transcribe, "edit": cmd_edit,
     "status": cmd_status, "check": cmd_check, "detect-file": cmd_detect_file,
     "retry": cmd_retry, "finish": cmd_finish, "next-edit": cmd_next_edit,
-    "make-assets": cmd_make_assets, "storage": cmd_storage,
+    "make-assets": cmd_make_assets, "storage": cmd_storage, "audiodetect": cmd_audiodetect,
 }

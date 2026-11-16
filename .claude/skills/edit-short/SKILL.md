@@ -1,6 +1,6 @@
 ---
 name: edit-short
-description: Edit a Clip Watcher raw Twitch clip into a finished, high-retention vertical YouTube Short with captions, motion, music and sound design. Use when asked to process the editing queue, edit a clip, or when an EDIT_JOB.md under data/jobs/ is referenced.
+description: Edit a Clip Watcher raw Twitch/gaming livestream clip into a finished, high-retention vertical Short (YouTube Shorts, TikTok, Reels) - find the real moment (kills, aces, clutches, fails, funny reactions) from chat/audio/scene signals, reframe 16:9 gameplay + facecam to 9:16, caption, sound-design, thumbnail and QA it. Use when asked to process the editing queue, edit a clip, or when an EDIT_JOB.md under data/jobs/ is referenced.
 ---
 
 # Clip Watcher: Shorts editor
@@ -12,6 +12,15 @@ your call: what the moment is, where it starts, how it looks, sounds and feels.
 
 The bar is "would I stop scrolling for this, and would I watch it again?". If the answer is no,
 make it yes or reject the clip.
+
+**The skill pack.** This playbook is the workflow. Three reference modules hold the depth. Read
+each one when you reach its step:
+
+| Module | Read it for |
+|---|---|
+| `references/highlight-analysis.md` | step 1: signals, gaming moment taxonomy (kill, multi-kill, ace, clutch, fail...), the scoring rubric, in and out points |
+| `references/gaming-reframe.md` | step 4: measuring the facecam and HUD, stack / fullcam / crop / blurfill, action tracking, HUD insets, safe zones |
+| `references/finishing.md` | steps 7 and 9–10: voice enhancement, thumbnail and cover, platform files, every check `finish` runs |
 
 ## 0. Pick the job
 - Given a job: read `EDIT_JOB.md` (its path is in your prompt). It lists every input path and the
@@ -46,7 +55,14 @@ a `C:/...` path inside an ffmpeg filter string gets mangled.
 | `python -m clipwatcher.editkit trimgraph --segments A-B,C-D` | ffmpeg trim/concat graph for your keep-list, producing `[vcut]` |
 | `python -m clipwatcher.editkit captions --words <words.json> --segments ... --out work/captions.ass --emphasis word1,word2 [--replace wrong=right] [--style karaoke\|pop\|clean] [--accent #FFD400] [--y 1250] [--max-words 3] [--font "Arial Black"]` | animated captions, word-highlighted, remapped onto your cut |
 | `python -m clipwatcher.editkit audiomix --source <raw clip> --segments ... --out work/mix.wav [--music music/<id>] [--music-gain -14] [--music-mute A-B] [--sfx sfx/<id>@T[:gainDb]]...` | cleaned voice, ducked music bed and timed effects, normalized to -14 LUFS |
-| `python -m clipwatcher.editkit inspect short.mp4 --sheet work/inspect.jpg` | decode check, loudness, true peak, contact sheet |
+| `python -m clipwatcher.editkit inspect short.mp4 --sheet work/inspect.jpg` | decode check, loudness, true peak, black, frozen and silent spans, contact sheet |
+| `python -m clipwatcher.editkit signals <raw clip>` | audio peaks, silences, scene changes, chat categories, moment guess, triage score |
+| `python -m clipwatcher.editkit timeline --source <clip> --from A --to B --out work/tl.jpg` | filmstrip with timestamps above the waveform: see the build, moment and reaction in one image |
+| `python -m clipwatcher.editkit grid --source <clip> --t T --out work/grid.jpg` | frame with a labelled pixel grid, for reading facecam and HUD rectangles |
+| `python -m clipwatcher.editkit reframe --source <clip> stack\|fullcam\|crop\|blurfill ... [--inset ...] --preview T` | 9:16 layout graph `[vcut]` → `[vlay]` and a preview frame |
+| `python -m clipwatcher.editkit track --source <clip> --segments ... --mask <facecam>` | follows on-screen action and returns a crop-X expression (not for FPS gameplay) |
+| `python -m clipwatcher.editkit snap --words <words.json> --segments ...` | moves keep-list edges off mid-word cuts |
+| `python -m clipwatcher.editkit thumbnail --source <clip> --t T --text "1 HP *ACE*" --out work/thumb.jpg` | thumbnail or cover preview (`finish` renders the final ones from your decisions) |
 
 `--segments` is your **keep-list in raw-clip seconds**. Pass the *same* list to `trimgraph`,
 `captions` and `audiomix`, and picture, captions and audio stay in sync through every jump cut.
@@ -54,7 +70,10 @@ The `T` times in `--sfx` and `--music-mute` are **output** seconds, measured aft
 
 Fonts available by name: `Arial Black` (default), `Impact`, `Segoe UI Black`, `Bahnschrift`.
 
-## 1. Find the moment
+## 1. Find the moment (details: `references/highlight-analysis.md`)
+0. Read the **highlight signals** in the brief: moment guess, loud audio peaks, scene changes, and
+   what chat is saying. Then open a `timeline` around the moment guess. For gameplay, find the
+   *visual proof* (kill feed, ace banner, 1vX portraits, death screen).
 1. Read the spike numbers. Chat reacts **after** the moment, usually 2–10 seconds later. The first
    chat messages after the spike often say exactly what happened ("CLIP IT", "he said WHAT").
 2. Read `transcript.srt` and `words.json` end to end. Look at every frame. Pull extra frames
@@ -62,7 +81,11 @@ Fonts available by name: `Arial Black` (default), `Impact`, `Segoe UI Black`, `B
    `ffmpeg -ss 41 -i <raw_clip> -t 6 -vf fps=3,scale=480:-2 <work>/look_%02d.jpg`
 3. Write a **logline**, one sentence that would make a stranger click: *"Asmon calls Ted Cruz a
    'master debater' with a straight face and chat loses it."* If you can't write one, reject.
-4. Classify the moment. The type drives every style choice below:
+4. Score it with the rubric in `references/highlight-analysis.md` (hook, standalone, emotion,
+   payoff, gameplay readability) and write `highlight_score`. **Under 50: reject.**
+5. Classify the moment. The type drives every style choice below. Gameplay types map onto these
+   rows: KILL/MULTI-KILL/ACE/OUTPLAY → HYPE, CLUTCH → CLUTCH, FAIL/THROW → FAIL. Write the
+   specific type (e.g. `"ACE"`) in `moment_type`.
 
 | Type | Feels like | Music bed | Effects palette | Pace | Accent |
 |---|---|---|---|---|---|
@@ -102,9 +125,11 @@ viewer should feel*.
 - Target durations: FUNNY/FAIL 12–30 s · HYPE 15–35 s · STORY 25–55 s · never over `max_seconds`.
   Shorter is better if nothing is lost.
 
-## 4. Frame it (1080×1920)
-Find the layout from the frames: where the facecam is, where the action is, where the HUD and
-text are.
+## 4. Frame it (1080×1920; details: `references/gaming-reframe.md`)
+Measure the facecam and HUD with `editkit grid`, then build each beat's layout with
+`editkit reframe ... --preview T` and look at the preview. FPS gameplay: centred crop on the
+crosshair, never `track`. Pin a kill feed or scoreboard back in with `--inset` when the crop loses
+it and it proves the moment.
 - **Facecam + content stack:** facecam crop on top (about 40–45%), gameplay or screen below. The
   default for reaction content. Crop the facecam *tightly* to the face (no stream overlays, no
   browser chrome at the seam) and crop the content to what matters.
@@ -122,7 +147,11 @@ text are.
 - Run `editkit captions` with your keep-list. Defaults: karaoke word highlight, Arial Black 88, thick
   outline, 1–3 words per card, pop-in animation.
 - **Fix transcription errors** with `--replace` (names, game terms, slang). Read every card in the
-  printed report. Wrong captions kill credibility.
+  printed report. Wrong captions kill credibility. Whisper mangles gaming vocabulary: agent and
+  champion names, weapons, callouts ("A site", "heaven", "B main"), "ace", "1v3", "flash", "ult".
+  Fix them all.
+- Captions must never sit on the game's own banners or HUD text (round-win, "FLAWLESS", the kill
+  feed). Move `--y`, or cut around the banner.
 - `--emphasis` the 1–3 words that carry the moment ("master,debater"). They render larger in the
   accent color. Use the accent color from the moment table.
 - Position: on the seam of a stack layout (about y=1150–1300), or around y=1250 for full-frame
@@ -148,7 +177,8 @@ All of these are tested. Times use `t` in output seconds when applied after `[vc
 - Effects must serve a beat. No zoom without a reason, no flash on a nothing moment.
 
 ## 7. Sound design: what makes it feel like a real channel
-- **Voice is king.** It has to be clearly intelligible over everything. `audiomix` cleans and
+- **Voice is king.** It has to be clearly intelligible over everything. Add `--enhance` for noisy
+  or muddy mics (see `references/finishing.md`). `audiomix` cleans and
   compresses it, ducks the music under it, and normalizes the final mix to -14 LUFS with true
   peak at or below -1.5 dB.
 - **Music bed:** pick from the moment table (`editkit library --type music`). Start it at the hook.
@@ -192,12 +222,19 @@ Check every item:
 Then ask: **what's the weakest second of this Short?** Fix it and render again. Note what you
 changed in `"revisions"`.
 
+`finish` re-checks all of this automatically, including that the Short doesn't open on black,
+has no frozen stretches, is exactly 1080×1920 H.264 yuv420p and is in the loudness window. Fix
+every problem it prints. Its warnings are judgement calls: look at each one.
+
 ## 10. Deliverables (in the job's output folder)
 - `short.mp4`
-- `edit_decisions.json` with: `logline`, `moment_type`, `beats`, `segments` (the keep-list),
+- `edit_decisions.json` with: `logline`, `moment_type`, `highlight_score`, `beats`, `segments` (the keep-list),
   `in_recording`/`out_recording`, `duration_s`, `composition`, `captions` (style, accent, fixes),
-  `effects`, `audio_assets` (library ids), `hook`, `revisions`, `rejected_alternatives`.
+  `effects`, `audio_assets` (library ids), `hook`, `thumbnail` (`raw_t`, `text`, `accent`,
+  `cover_t`; see `references/finishing.md`), `revisions`, `rejected_alternatives`.
 - `description.txt` with 3 title options (≤ 60 chars, curiosity-driven, no clickbait lies), a 1–2
   line description, the credit line `Streamer: <name> - https://www.twitch.tv/<channel>`, any
   music/SFX credits `audiomix` printed, and 3–5 relevant hashtags including `#shorts`.
-- Run the job's finish command and fix anything it reports.
+- Run the job's finish command and fix anything it reports. It renders `final/thumbnail.jpg`,
+  `final/cover.jpg` and the platform files (`final/UPLOAD.txt` says what goes where). Look at the
+  thumbnail: if it's weak, change `thumbnail` in your decisions and run finish again.

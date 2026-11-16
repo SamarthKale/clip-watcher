@@ -31,6 +31,17 @@ min_spike_messages = 8
 cooldown_seconds = 90
 max_run_buckets = 6
 gap_seconds = 20
+merge_window_seconds = 45    # a spike from another detector this close = the same moment (one clip)
+
+[detect.audio]               # STEP 3b (optional) - loudness spikes in the recording. Off by default:
+enabled = false              # the chat detector above stays the default trigger.
+rise_lu = 12.0               # spike = this many LU above the previous 5 minutes (12 ~ a scream)
+floor_lufs = -24.0           # ...and at least this loud
+window_seconds = 300
+min_history_seconds = 120
+min_seconds = 2              # sustained this long (filters single gunshots / ability sounds)
+cooldown_seconds = 90
+chunk_seconds = 30           # scan the recording 30 s at a time, ~40 s behind live
 
 [sync]
 chat_offset_seconds = 0.0    # shift chat time onto the video timeline if you measure a drift
@@ -42,6 +53,8 @@ safety_seconds = 10
 frames_every_seconds = 10
 frame_width = 640
 chat_context_seconds = 60
+signals = true               # signals.json: loudness peaks, silences, scene cuts, chat emote categories
+scene_detect = true
 
 [transcribe]                 # STEP 5 - whisper.cpp
 enabled = true
@@ -55,6 +68,13 @@ mode = "claude"              # "claude" = automatic headless edits, "manual" = r
 max_turns = 80
 timeout_seconds = 3600
 max_short_seconds = 60
+
+[export]                     # written by `finish` into <Short>/final/ - nothing is ever uploaded
+enabled = true
+platforms = ["youtube_shorts", "tiktok", "instagram_reels"]
+thumbnail = true             # thumbnail.jpg 1280x720 + cover.jpg 1080x1920
+# [export.specs.instagram_reels]   # override any platform limit, e.g.
+# max_seconds = 90
 
 [queue]
 max_attempts = 4
