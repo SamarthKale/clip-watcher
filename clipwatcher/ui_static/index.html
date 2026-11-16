@@ -1,0 +1,370 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Clip Watcher</title>
+<style>
+:root{
+  --bg:#faf7f4; --card:#ffffff; --ink:#2a1a12; --muted:#7a6a60; --line:#eadfd6; --soft:#f5efe9;
+  --accent:#ff8a2b; --accent-ink:#7a3300; --accent-soft:#fff0e2;
+  --ok:#2e8b57; --ok-soft:#e6f5ec; --warn:#b7791f; --warn-soft:#fdf3dc; --bad:#c0392b; --bad-soft:#fdeaea;
+  --live:#6a4cff; --live-soft:#eeeaff; --log-bg:#1d1612; --log-ink:#eadfd6;
+}
+@media (prefers-color-scheme: dark){
+  :root{--bg:#171210; --card:#211a16; --ink:#f3e9e1; --muted:#a8978c; --line:#3a2e27; --soft:#2a211c;
+    --accent-soft:#3a2415; --accent-ink:#ffc999; --ok-soft:#173326; --warn-soft:#3a2e12; --bad-soft:#3a1a18;
+    --live-soft:#251f4a; --log-bg:#0f0b09;}
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+button,input{font:inherit;color:inherit}
+.app{display:grid;grid-template-columns:208px 1fr;min-height:100vh}
+aside{border-right:1px solid var(--line);padding:20px 14px;position:sticky;top:0;height:100vh;display:flex;flex-direction:column;gap:6px}
+.brand{display:flex;align-items:center;gap:10px;font-weight:700;font-size:16px;padding:0 8px 14px}
+.logo{width:30px;height:30px;border-radius:9px;background:var(--accent);display:grid;place-items:center}
+.logo svg{width:18px;height:18px}
+nav a{display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:10px;color:var(--muted);text-decoration:none;cursor:pointer;font-weight:500}
+nav a:hover{background:var(--soft);color:var(--ink)}
+nav a.on{background:var(--accent-soft);color:var(--accent-ink)}
+nav svg{width:17px;height:17px;flex:none}
+.side-foot{margin-top:auto;color:var(--muted);font-size:12px;padding:8px}
+main{padding:24px 28px 40px;max-width:1180px;width:100%}
+h1{margin:0;font-size:20px}
+.sub{color:var(--muted);margin:2px 0 18px}
+.page{display:none}.page.on{display:block}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px}
+.grid{display:grid;gap:14px}
+.stats{grid-template-columns:repeat(4,minmax(0,1fr));margin-bottom:14px}
+.stat{display:flex;flex-direction:column;gap:2px}
+.ico{width:36px;height:36px;border-radius:10px;background:var(--accent-soft);color:var(--accent-ink);display:grid;place-items:center;margin-bottom:10px}
+.ico svg{width:18px;height:18px}
+.big{font-size:28px;font-weight:700;line-height:1.1}
+.lbl{color:var(--muted)}
+.two{grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);margin-bottom:14px}
+.row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.spacer{flex:1}
+.ctl{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:14px}
+input.txt{flex:1;min-width:240px;border:1px solid var(--line);background:var(--soft);border-radius:12px;padding:11px 14px;outline:none}
+input.txt:focus{border-color:var(--accent);background:var(--card)}
+.btn{border:1px solid var(--line);background:var(--card);border-radius:12px;padding:10px 16px;cursor:pointer;font-weight:600}
+a.btn{color:inherit}
+.btn:hover{background:var(--soft)}
+.btn.pri{background:var(--accent);border-color:var(--accent);color:#2a1200}
+.btn.pri:hover{filter:brightness(1.05)}
+.btn.stop{background:var(--bad-soft);border-color:transparent;color:var(--bad)}
+.btn:disabled{opacity:.5;cursor:default}
+.chip{display:inline-flex;align-items:center;gap:6px;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:600;background:var(--soft);color:var(--muted)}
+.chip.ok{background:var(--ok-soft);color:var(--ok)}.chip.warn{background:var(--warn-soft);color:var(--warn)}
+.chip.bad{background:var(--bad-soft);color:var(--bad)}.chip.live{background:var(--live-soft);color:var(--live)}
+.chip.wait{background:var(--soft);color:var(--muted)}
+.dot{width:8px;height:8px;border-radius:50%;background:currentColor}
+.chip.pulse .dot{animation:p 1.4s infinite}@keyframes p{50%{opacity:.25}}
+.card h2{margin:0 0 2px;font-size:15px}
+.hint{color:var(--muted);font-size:12.5px}
+svg.chart{width:100%;height:auto;display:block}
+.legend{display:flex;gap:14px;color:var(--muted);font-size:12px;margin-top:6px}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+.chat{max-height:236px;overflow:auto;font-size:13px;display:flex;flex-direction:column;gap:3px}
+.chat b{color:var(--accent-ink)}
+.empty{color:var(--muted);text-align:center;padding:26px 10px}
+table{width:100%;border-collapse:collapse}
+th{text-align:left;color:var(--muted);font-weight:500;font-size:12px;padding:6px 8px;border-bottom:1px solid var(--line)}
+td{padding:9px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+tr:last-child td{border-bottom:0}
+.mono{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:12px}
+.err{color:var(--bad);font-size:12px;margin-top:2px}
+.shorts{grid-template-columns:repeat(auto-fill,minmax(250px,1fr))}
+.short{padding:0;overflow:hidden;display:flex;flex-direction:column}
+.short video{width:100%;aspect-ratio:9/16;background:#000;display:block;max-height:440px;object-fit:contain}
+.short .body{padding:12px 14px 14px;display:flex;flex-direction:column;gap:8px}
+.short .t{font-weight:650}
+.meta{display:flex;gap:6px;flex-wrap:wrap}
+.console{background:var(--log-bg);color:var(--log-ink);border-radius:14px;padding:12px 14px;height:calc(100vh - 230px);min-height:320px;overflow:auto;font:12.5px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace}
+.console.mini{height:210px;min-height:0;font-size:12px}
+.ln{white-space:pre-wrap;word-break:break-word}
+.ln .ts{color:#8d7c70}.ln .st{color:#ffb36b}
+.ln.WARNING{color:#f4d06f}.ln.ERROR,.ln.CRITICAL{color:#ff8f84}
+.ln.spike{color:#9ee6b8;font-weight:600}
+.tools{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
+.pill{border:1px solid var(--line);background:var(--card);border-radius:999px;padding:4px 12px;cursor:pointer;font-size:12.5px;color:var(--muted)}
+.pill.on{background:var(--accent-soft);color:var(--accent-ink);border-color:transparent;font-weight:600}
+.toast{position:fixed;right:18px;bottom:18px;background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:12px;opacity:0;transition:.2s;pointer-events:none}
+.toast.on{opacity:1}
+@media (max-width:900px){
+  .app{grid-template-columns:1fr}
+  aside{position:static;height:auto;flex-direction:row;flex-wrap:wrap;border-right:0;border-bottom:1px solid var(--line);padding:10px}
+  .brand{padding:0 8px 0 0}.side-foot{display:none}
+  nav{display:flex;gap:4px;flex-wrap:wrap}
+  main{padding:16px}
+  .stats{grid-template-columns:repeat(2,minmax(0,1fr))}.two{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside>
+    <div class="brand"><div class="logo"><svg viewBox="0 0 24 24" fill="none" stroke="#2a1200" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4 8.1 15.9M14.5 14.5 20 20M8.1 8.1 12 12"/></svg></div>Clip Watcher</div>
+    <nav>
+      <a data-page="home" class="on"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11 12 3l9 8M5 10v10h14V10"/></svg>Home</a>
+      <a data-page="shorts"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="2" width="12" height="20" rx="3"/><path d="m10 9 5 3-5 3z"/></svg>Shorts</a>
+      <a data-page="pipeline"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h10M4 18h6"/></svg>Spikes &amp; clips</a>
+      <a data-page="logs"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m4 17 6-6-6-6M12 19h8"/></svg>Live log</a>
+    </nav>
+    <div class="side-foot">Twitch only. Nothing is uploaded or posted from here.</div>
+  </aside>
+
+  <main>
+    <!-- HOME -->
+    <section class="page on" id="p-home">
+      <h1>Home</h1>
+      <div class="sub" id="homeSub">Loading…</div>
+
+      <div class="card" style="margin-bottom:14px">
+        <div class="ctl">
+          <input class="txt" id="chan" placeholder="https://www.twitch.tv/name or just the channel name" spellcheck="false" autocomplete="off">
+          <button class="btn pri" id="startBtn">Start watching</button>
+          <button class="btn stop" id="stopBtn" style="display:none">Stop</button>
+        </div>
+        <div class="row">
+          <span class="chip" id="pipeChip"><span class="dot"></span><span id="pipeTxt">Pipeline off</span></span>
+          <span class="chip" id="liveChip"><span class="dot"></span><span id="liveTxt">Offline</span></span>
+          <span class="hint" id="pipeHint"></span>
+        </div>
+      </div>
+
+      <div class="grid stats">
+        <div class="card stat"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="2"/><path d="M16.2 7.8a6 6 0 0 1 0 8.4M7.8 16.2a6 6 0 0 1 0-8.4M19 5a10 10 0 0 1 0 14M5 19A10 10 0 0 1 5 5"/></svg></div><div class="big" id="sRec">Offline</div><div class="lbl">Stream</div></div>
+        <div class="card stat"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg></div><div class="big" id="sSpikes">0</div><div class="lbl">Spikes today</div></div>
+        <div class="card stat"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4 8.1 15.9M14.5 14.5 20 20M8.1 8.1 12 12"/></svg></div><div class="big" id="sShorts">0</div><div class="lbl">Shorts today</div></div>
+        <div class="card stat"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></div><div class="big" id="sQueue">0</div><div class="lbl" id="sQueueLbl">In edit queue</div></div>
+      </div>
+
+      <div class="grid two">
+        <div class="card">
+          <div class="row"><div><h2>Chat, live</h2><div class="hint">Messages per 10 s over the last 10 minutes. A spike is the dashed line.</div></div><span class="spacer"></span><span class="chip" id="chatChip"><span class="dot"></span><span id="chatTxt">Not connected</span></span></div>
+          <svg class="chart" id="chatChart" viewBox="0 0 600 170" preserveAspectRatio="none" style="margin-top:10px"></svg>
+          <div class="legend"><span><i style="background:var(--accent)"></i>messages</span><span><i style="background:var(--live)"></i>spike line</span><span id="chatNums"></span></div>
+        </div>
+        <div class="card">
+          <h2>Chat feed</h2><div class="hint" style="margin-bottom:8px">Read-only. This is what the detector sees.</div>
+          <div class="chat" id="chatFeed"><div class="empty">Chat appears when the pipeline is running.</div></div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-bottom:14px">
+        <div class="row"><div><h2>Activity</h2><div class="hint">Last 14 days</div></div><span class="spacer"></span>
+          <div style="text-align:right"><b id="aSpikes">0</b> <span class="hint">spikes</span> &nbsp; <b id="aShorts">0</b> <span class="hint">Shorts made</span></div></div>
+        <svg class="chart" id="actChart" viewBox="0 0 700 150" preserveAspectRatio="none" style="margin-top:8px"></svg>
+        <div class="legend"><span><i style="background:var(--accent)"></i>Shorts made</span><span><i style="background:var(--line)"></i>spikes</span></div>
+      </div>
+
+      <div class="grid two" style="margin-bottom:0">
+        <div class="card">
+          <div class="row"><h2>Recent spikes</h2><span class="spacer"></span><a class="hint" href="#" data-go="pipeline">See all</a></div>
+          <div id="homeEvents"></div>
+        </div>
+        <div class="card">
+          <div class="row"><h2>Live log</h2><span class="spacer"></span><a class="hint" href="#" data-go="logs">Open</a></div>
+          <div class="console mini" id="miniLog" style="margin-top:8px"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SHORTS -->
+    <section class="page" id="p-shorts">
+      <h1>Shorts</h1>
+      <div class="sub" id="shortsSub">Finished Shorts, newest first. Review them here, then post them yourself.</div>
+      <div class="grid shorts" id="shortsGrid"></div>
+    </section>
+
+    <!-- PIPELINE -->
+    <section class="page" id="p-pipeline">
+      <h1>Spikes &amp; clips</h1>
+      <div class="sub">Every chat spike and where its clip is: cutting, transcribing, editing, done.</div>
+      <div class="card"><div id="allEvents"></div></div>
+    </section>
+
+    <!-- LOGS -->
+    <section class="page" id="p-logs">
+      <h1>Live log</h1>
+      <div class="sub">Everything the pipeline prints: recorder, chat, detector, extractor, transcriber, editor, storage.</div>
+      <div class="tools">
+        <span id="stagePills"></span>
+        <span class="spacer"></span>
+        <button class="pill" id="errOnly">Errors &amp; warnings only</button>
+        <button class="pill on" id="follow">Follow</button>
+        <button class="pill" id="clearLog">Clear</button>
+      </div>
+      <div class="console" id="console"></div>
+    </section>
+  </main>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+let channel = localStorage.getItem("cw.channel") || "";
+let page = "home", st = null;
+
+function toast(m){const t=$("#toast");t.textContent=m;t.classList.add("on");setTimeout(()=>t.classList.remove("on"),2600)}
+async function api(path, body){
+  const r = await fetch(path, body ? {method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(body)} : {});
+  return r.json();
+}
+const q = () => channel ? "?channel=" + encodeURIComponent(channel) : "";
+const fmtTime = t => t ? new Date(t*1000).toLocaleTimeString([], {hour:"2-digit",minute:"2-digit",second:"2-digit"}) : "";
+const ago = t => { const s = Math.max(0, Date.now()/1000 - t); return s<90 ? Math.round(s)+"s ago" : s<5400 ? Math.round(s/60)+" min ago" : Math.round(s/3600)+" h ago"; };
+
+/* navigation */
+function go(p){
+  page = p;
+  document.querySelectorAll(".page").forEach(e => e.classList.toggle("on", e.id === "p-"+p));
+  document.querySelectorAll("nav a").forEach(e => e.classList.toggle("on", e.dataset.page === p));
+  if (p === "shorts") loadShorts();
+  if (p === "logs") renderConsole(true);
+  location.hash = p;
+}
+document.querySelectorAll("nav a").forEach(a => a.onclick = () => go(a.dataset.page));
+document.querySelectorAll("[data-go]").forEach(a => a.onclick = e => { e.preventDefault(); go(a.dataset.go); });
+
+/* control */
+$("#chan").value = channel ? "https://www.twitch.tv/" + channel : "";
+$("#startBtn").onclick = async () => {
+  const v = $("#chan").value.trim();
+  if (!v) return toast("Enter a Twitch channel first");
+  $("#startBtn").disabled = true;
+  const r = await api("/api/start", {channel: v});
+  $("#startBtn").disabled = false;
+  if (!r.ok) return toast(r.message || "Could not start");
+  channel = r.channel; localStorage.setItem("cw.channel", channel);
+  $("#chan").value = "https://www.twitch.tv/" + channel;
+  toast(r.message === "started" ? "Watching " + channel : r.message);
+  refresh();
+};
+$("#stopBtn").onclick = async () => { const r = await api("/api/stop", {}); toast(r.message === "stopping" ? "Stopping… the recorder closes cleanly" : r.message); setTimeout(refresh, 1500); };
+$("#chan").addEventListener("keydown", e => { if (e.key === "Enter") $("#startBtn").click(); });
+
+/* state */
+function chip(el, tone, text, pulse){ el.className = "chip " + tone + (pulse ? " pulse" : ""); }
+async function refresh(){
+  try{ st = await api("/api/state" + q()); }catch(e){ $("#homeSub").textContent = "Dashboard can't reach the server."; return; }
+  if (!channel && st.channel) { channel = st.channel; $("#chan").value = "https://www.twitch.tv/" + channel; }
+  const p = st.pipeline;
+  chip($("#pipeChip"), p.running ? "ok" : "", "", p.running); $("#pipeTxt").textContent = p.running ? "Pipeline running" : "Pipeline off";
+  chip($("#liveChip"), st.live ? "live" : "", "", st.live); $("#liveTxt").textContent = st.live ? "Live and recording" : (p.running ? "Waiting for stream" : "Offline");
+  $("#pipeHint").textContent = p.running && !p.owned ? "Started outside this window. Stop it with Ctrl+C in its terminal." : "";
+  $("#startBtn").style.display = p.owned ? "none" : ""; $("#stopBtn").style.display = p.owned ? "" : "none";
+  $("#chan").disabled = !!p.owned;
+  $("#sRec").textContent = st.live ? "Live" : (p.running ? "Waiting" : "Offline");
+  $("#sSpikes").textContent = st.stats.spikes_today; $("#sShorts").textContent = st.stats.shorts_today;
+  const qn = st.stats.queue; $("#sQueue").textContent = qn.waiting + qn.editing;
+  $("#sQueueLbl").textContent = qn.editing ? "Editing now, " + qn.waiting + " waiting" : "In edit queue";
+  $("#homeSub").textContent = st.channel ? (st.live ? "Recording " + st.channel + " since " + fmtTime(st.live_since) + "." : "Channel: " + st.channel + ".") + " " + st.stats.shorts_total + " Shorts made in total." : "Paste a Twitch channel above and press Start watching.";
+  renderActivity(st.activity);
+  renderEvents($("#homeEvents"), st.events.slice(0, 6), true);
+  if (page === "pipeline") renderEvents($("#allEvents"), st.events, false);
+}
+function renderEvents(el, rows, compact){
+  if (!rows.length){ el.innerHTML = '<div class="empty">No spikes yet. They appear when chat jumps to 3x its normal pace.</div>'; return; }
+  el.innerHTML = "<table><thead><tr><th>Spike</th><th>Chat</th><th>Status</th></tr></thead><tbody>" + rows.map(r =>
+    `<tr><td><div>${fmtTime(r.spike_ts)}</div><div class="hint mono">${esc(r.id)}</div></td>
+     <td>${r.messages ?? "–"} msgs<div class="hint">${r.ratio ? r.ratio + "x of " + r.baseline : ""}</div></td>
+     <td><span class="chip ${r.tone}${r.tone==="live"?" pulse":""}"><span class="dot"></span>${esc(r.state)}</span>${r.error && !compact ? `<div class="err">${esc(r.error)}</div>` : ""}</td></tr>`).join("") + "</tbody></table>";
+}
+
+/* charts */
+function renderActivity(a){
+  const W=700,H=150,pad=22,bw=(W-pad*2)/a.length, max=Math.max(4, ...a.map(d=>Math.max(d.spikes,d.shorts)));
+  let g = "";
+  for(let i=0;i<=4;i++){const y=10+(H-40)*i/4;g+=`<line x1="${pad}" x2="${W-pad}" y1="${y}" y2="${y}" stroke="var(--line)" stroke-width="1" vector-effect="non-scaling-stroke"/>`;}
+  a.forEach((d,i)=>{
+    const x=pad+i*bw, h1=(H-40)*d.spikes/max, h2=(H-40)*d.shorts/max;
+    g+=`<rect x="${x+bw*.12}" y="${H-30-h1}" width="${bw*.36}" height="${h1}" rx="2" fill="var(--line)"/>`;
+    g+=`<rect x="${x+bw*.5}" y="${H-30-h2}" width="${bw*.36}" height="${h2}" rx="2" fill="var(--accent)"/>`;
+    if(i%2===1||i===a.length-1) g+=`<text x="${x+bw/2}" y="${H-10}" text-anchor="middle" font-size="9.5" fill="var(--muted)">${i===a.length-1?"Today":d.date.slice(5)}</text>`;
+  });
+  $("#actChart").innerHTML = g;
+  $("#aSpikes").textContent = a.reduce((s,d)=>s+d.spikes,0); $("#aShorts").textContent = a.reduce((s,d)=>s+d.shorts,0);
+}
+async function loadChat(){
+  let c; try{ c = await api("/api/chat" + q()); }catch(e){ return; }
+  chip($("#chatChip"), c.connected ? "ok" : "", "", c.connected); $("#chatTxt").textContent = c.connected ? "Chat connected" : "Not connected";
+  const b=c.buckets||[]; const W=600,H=170,pad=4,bw=(W-pad*2)/Math.max(1,b.length); const max=Math.max(10,c.threshold*1.15,...b);
+  let g="";
+  b.forEach((v,i)=>{const h=(H-14)*v/max; g+=`<rect x="${pad+i*bw+1}" y="${H-h}" width="${Math.max(1,bw-2)}" height="${h}" rx="2" fill="var(--accent)" opacity="${v>=c.threshold&&c.threshold>0?1:.7}"/>`});
+  if(c.threshold){const y=H-(H-14)*c.threshold/max; g+=`<line x1="0" x2="${W}" y1="${y}" y2="${y}" stroke="var(--live)" stroke-width="1.5" stroke-dasharray="5 4" vector-effect="non-scaling-stroke"/>`}
+  $("#chatChart").innerHTML=g;
+  const now=b.length?b[b.length-1]:0;
+  $("#chatNums").textContent = b.length ? `now ${now}/10s · normal ${c.baseline} · spike at ${c.threshold}` : "";
+  const feed=$("#chatFeed"); const m=c.messages||[];
+  if(!m.length){feed.innerHTML='<div class="empty">'+(c.connected?"Waiting for chat…":"Chat appears when the pipeline is running.")+'</div>';return}
+  const stick = feed.scrollTop + feed.clientHeight >= feed.scrollHeight - 30;
+  feed.innerHTML = m.map(x=>`<div><b>${esc(x.name)}</b> ${esc(x.text)}</div>`).join("");
+  if(stick) feed.scrollTop = feed.scrollHeight;
+}
+
+/* shorts */
+async function loadShorts(){
+  const list = await api("/api/shorts");
+  $("#shortsSub").textContent = list.length ? list.length + " finished Short" + (list.length>1?"s":"") + ", newest first. Review them here, then post them yourself." : "No Shorts yet. They appear here as soon as an edit finishes.";
+  const el = $("#shortsGrid");
+  if(!list.length){ el.innerHTML='<div class="card empty" style="grid-column:1/-1">Nothing here yet.</div>'; return; }
+  const keep = [...el.querySelectorAll("video")].find(v=>!v.paused);
+  if (keep) return; // don't rebuild while one is playing
+  el.innerHTML = list.map(s => `<div class="card short">
+    <video controls preload="metadata" ${s.has_thumb?`poster="/media/${s.event_id}/thumbnail.jpg"`:""} src="/media/${s.event_id}/short.mp4"></video>
+    <div class="body"><div class="t">${esc(s.title)}</div>
+      <div class="meta"><span class="chip">${s.duration}s</span>${s.score!=null?`<span class="chip">score ${esc(s.score)}</span>`:""}${s.moment?`<span class="chip">${esc(s.moment)}</span>`:""}<span class="chip">${s.size_mb} MB</span></div>
+      <div class="hint">${esc(s.channel)} · ${esc(s.date)} · made ${ago(s.made)}</div>
+      <div class="row"><a class="btn" style="text-decoration:none" href="/media/${s.event_id}/short.mp4" download="${esc(s.event_id)}.mp4">Download</a>
+      <button class="btn" onclick="openFolder('${esc(s.event_id)}')">Show folder</button></div></div></div>`).join("");
+}
+async function openFolder(id){ const r = await api("/api/open",{event_id:id}); if(!r.ok) toast("Could not open the folder"); }
+
+/* logs */
+let offsets = null, lines = [], stageFilter = "all", errOnly = false, follow = true;
+const known = new Set();
+async function pollLogs(){
+  let r; try{ r = await api("/api/logs" + (offsets ? "?offsets=" + encodeURIComponent(JSON.stringify(offsets)) : "")); }catch(e){ return; }
+  offsets = r.offsets;
+  if (r.lines.length){
+    lines = lines.concat(r.lines).slice(-2500);
+    r.lines.forEach(l => known.add(l.stage));
+    renderPills(); renderConsole(); renderMini();
+  }
+}
+function lineHtml(l){
+  const spike = /SPIKE/.test(l.msg) ? " spike" : "";
+  return `<div class="ln ${esc(l.level)}${spike}"><span class="ts">${esc(l.ts.slice(11))}</span> <span class="st">${esc(l.stage)}</span> ${esc(l.msg)}</div>`;
+}
+function visible(){ return lines.filter(l => (stageFilter==="all"||l.stage===stageFilter) && (!errOnly||/WARNING|ERROR|CRITICAL/.test(l.level))); }
+function renderConsole(force){
+  if (page !== "logs" && !force) return;
+  const el = $("#console"); const stick = follow;
+  el.innerHTML = visible().slice(-700).map(lineHtml).join("") || '<div class="ln" style="color:#8d7c70">No log lines yet. Start watching a channel to see the pipeline work.</div>';
+  if (stick) el.scrollTop = el.scrollHeight;
+}
+function renderMini(){
+  const el = $("#miniLog"); el.innerHTML = lines.slice(-30).map(lineHtml).join("") || '<div class="ln" style="color:#8d7c70">No log lines yet.</div>'; el.scrollTop = el.scrollHeight;
+}
+function renderPills(){
+  const names = ["all", ...[...known].sort()];
+  $("#stagePills").innerHTML = names.map(n => `<button class="pill ${n===stageFilter?"on":""}" data-s="${esc(n)}">${esc(n)}</button>`).join(" ");
+  document.querySelectorAll("#stagePills .pill").forEach(b => b.onclick = () => { stageFilter = b.dataset.s; renderPills(); renderConsole(true); });
+}
+$("#errOnly").onclick = e => { errOnly = !errOnly; e.target.classList.toggle("on", errOnly); renderConsole(true); };
+$("#follow").onclick = e => { follow = !follow; e.target.classList.toggle("on", follow); if(follow) $("#console").scrollTop = $("#console").scrollHeight; };
+$("#clearLog").onclick = () => { lines = []; renderConsole(true); renderMini(); };
+$("#console").addEventListener("wheel", () => { const el=$("#console"); if (follow && el.scrollTop + el.clientHeight < el.scrollHeight - 40){ follow=false; $("#follow").classList.remove("on"); } });
+
+/* boot */
+const start = (location.hash || "#home").slice(1); go(["home","shorts","pipeline","logs"].includes(start) ? start : "home");
+renderPills();
+refresh(); loadChat(); pollLogs();
+setInterval(refresh, 3000); setInterval(loadChat, 2000); setInterval(pollLogs, 1500);
+setInterval(() => { if (page === "shorts") loadShorts(); }, 8000);
+</script>
+</body>
+</html>

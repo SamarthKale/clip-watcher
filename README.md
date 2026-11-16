@@ -63,6 +63,19 @@ python -m clipwatcher run --channel SOME_CHANNEL
 `run` starts every stage, and each one restarts if it crashes. Stop it with Ctrl+C. To run for a
 fixed time, use `--for 600` (seconds).
 
+### Dashboard
+
+```bash
+python -m clipwatcher ui          # opens http://127.0.0.1:8765 (next free port if that one is taken)
+```
+
+A local, Twitch-only dashboard (standard library only, listens on 127.0.0.1). Paste a channel link
+and press **Start watching** to run the pipeline, or **Stop** to end it cleanly. It shows the live
+chat rate against the spike line, the read-only chat feed, every spike and where its clip is
+(cutting, transcribing, editing, done), a player for each finished Short, and a live log that merges
+every stage's output (recorder, chat, detector, extractor, transcriber, editor, storage). It never
+uploads or posts anything.
+
 ## Commands
 
 | Command | What it does |
@@ -71,6 +84,7 @@ fixed time, use `--for 600` (seconds).
 | `record`, `chat`, `detect` | Run steps 1–3 on their own |
 | `audiodetect` | Optional audio-spike trigger (`run` starts it when `detect.audio.enabled = true`) |
 | `extract`, `transcribe`, `edit`, `storage` | Run the queue workers for steps 4–7 |
+| `ui` | Local dashboard: start/stop, live chat and logs, clip status, Short player (`--port`, `--no-open`) |
 | `status` | Sessions, queue counts, recent jobs, errors and storage state |
 | `check` | Verify tools, storage drives and the sound library |
 | `retry <event_id> <stage>` | Re-queue a failed or skipped job |
