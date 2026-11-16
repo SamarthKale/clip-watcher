@@ -135,9 +135,20 @@ DEFAULTS: dict[str, Any] = {
         "allowed_tools": [
             "Read", "Write", "Edit", "Glob", "Grep",
             "Bash(ffmpeg *)", "Bash(ffprobe *)", "Bash(python *)", "Bash(py *)",
+            # Windows: Claude often calls the .exe names, which "python *" does not match
+            "Bash(python.exe *)", "Bash(py.exe *)", "Bash(mkdir *)",
+            # Claude calls the bundled binaries by relative path (tools/ffmpeg/ffmpeg.exe, ../../tools/...)
+            "Bash(*ffmpeg.exe *)", "Bash(*ffprobe.exe *)",
         ],
         "extra_args": [],
         "max_short_seconds": 60,
+        # Aim for about this length when the footage supports it (0 = no preference). The hard
+        # limit stays max_short_seconds.
+        "target_short_seconds": 0,
+        # true: never reject a clip for a low score or "no real moment" - always render the best
+        # Short the footage allows (edits run highest triage score first). Safety and copyright
+        # rejections still apply.
+        "render_all": False,
     },
     "export": {
         # Platform files written by `finish` into <Short>/final/. The master short.mp4 is

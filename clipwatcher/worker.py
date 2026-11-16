@@ -8,7 +8,7 @@ from typing import Callable
 
 from .config import Config
 from .db import DB
-from .util import STOP
+from .util import STOP, read_json
 
 
 @dataclass
@@ -38,11 +38,23 @@ Handler = Callable[[Config, DB, "object"], "Done | Defer | Skip"]
 AFTER_TERMINAL = {"transcribe": "edit", "edit": "archive"}
 
 
+def _triage_rank(cfg: Config):
+    """Edit queue order: the clip with the highest triage score (signals.json) goes first."""
+    def rank(event_id: str) -> float:
+        try:
+            from .extractor import clip_dir
+            sig = read_json(clip_dir(cfg, event_id) / "signals.json")
+            return float(sig.get("triage", {}).get("score", 0))
+        except (OSError, ValueError, TypeError, AttributeError):
+            return 0.0
+    return rank
+
+
 def process_one(cfg: Config, db: DB, stage: str, handler: Handler, lease_seconds: float) -> bool:
     """Claim and run one job. Returns False when the queue had nothing runnable."""
     log = logging.getLogger(stage)
     q = cfg["queue"]
-    job = db.claim(stage, lease_seconds)
+    job = db.claim(stage, lease_seconds, rank=_triage_rank(cfg) if stage == "edit" else None)
     if job is None:
         return False
     try:

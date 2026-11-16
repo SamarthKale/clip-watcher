@@ -195,16 +195,22 @@ class DB:
         with self.tx() as c:
             self._enqueue(c, event_id, stage, not_before)
 
-    def claim(self, stage: str, lease_seconds: float) -> sqlite3.Row | None:
-        """Atomically take the next runnable job for `stage` (or one whose lease expired)."""
+    def claim(self, stage: str, lease_seconds: float, rank=None) -> sqlite3.Row | None:
+        """Atomically take the next runnable job for `stage` (or one whose lease expired).
+
+        `rank(event_id) -> float`, when given, makes the highest-ranked runnable job go first
+        (ties keep the oldest-first order)."""
         now = time.time()
         with self.tx() as c:
-            row = c.execute(
+            rows = c.execute(
                 "SELECT * FROM jobs WHERE stage=? AND ("
                 " (status='pending' AND not_before<=?) OR (status='running' AND lease_until<?))"
-                " ORDER BY not_before, id LIMIT 1", (stage, now, now)).fetchone()
-            if row is None:
+                " ORDER BY not_before, id", (stage, now, now)).fetchall()
+            if not rows:
                 return None
+            row = rows[0]
+            if rank is not None and len(rows) > 1:
+                row = max(rows, key=lambda r: (rank(r["event_id"]), -r["id"]))
             c.execute("UPDATE jobs SET status='running', attempts=attempts+1, lease_until=?, updated=? "
                       "WHERE id=?", (now + lease_seconds, now, row["id"]))
             return c.execute("SELECT * FROM jobs WHERE id=?", (row["id"],)).fetchone()
