@@ -232,7 +232,12 @@ class Dashboard:
                     if j and j.get("last_error") and j["status"] in ("failed", "pending"):
                         err = j["last_error"].strip().splitlines()[0][:160]
                         break
+                open_stage = next((s for s in ("extract", "transcribe", "edit", "archive")
+                                   if jobs.get(e["id"], {}).get(s, {}).get("status")
+                                   in ("pending", "failed", "manual")), None)
                 rows.append({"id": e["id"], "channel": e["channel"], "spike_ts": e["spike_ts"],
+                             "open_stage": open_stage,
+                             "failed": bool(open_stage and jobs[e["id"]][open_stage]["status"] == "failed"),
                              "created": e["created"], "state": label, "tone": tone,
                              "messages": st.get("first_count"), "peak": st.get("peak_count"),
                              "baseline": st.get("baseline"), "ratio": st.get("first_ratio"),
@@ -460,6 +465,22 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json({"ok": True, "message": self.dash.runner.start(ch), "channel": ch})
             if url == "/api/stop":
                 return self._json({"ok": True, "message": self.dash.runner.stop()})
+            if url in ("/api/skip", "/api/retry"):
+                event_id = str(body.get("event_id", ""))
+                if not re.fullmatch(r"[A-Za-z0-9_.-]+", event_id):
+                    return self._json({"ok": False, "message": "bad clip id"}, 400)
+                from .cli import skip_job
+                db = self.dash.db()
+                try:
+                    if url == "/api/skip":
+                        ok, msg = skip_job(db, event_id)
+                    else:
+                        stage = db.open_stage(event_id)
+                        n = db.retry(event_id, stage) if stage in ("extract", "transcribe", "edit") else 0
+                        ok, msg = bool(n), (f"{stage} queued again" if n else "nothing to retry")
+                finally:
+                    db.close()
+                return self._json({"ok": ok, "message": msg})
             if url == "/api/open":
                 p = self.dash.media_path(str(body.get("event_id", "")), "short.mp4")
                 if p is None:

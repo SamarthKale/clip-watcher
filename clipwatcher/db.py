@@ -249,6 +249,23 @@ class DB:
                                 (time.time(), event_id, stage))
         return cur.rowcount
 
+    def skip(self, event_id: str, stage: str, note: str = "skipped by you") -> int:
+        """Mark a waiting or failed job as skipped. A running job is left alone."""
+        cur = self.conn.execute(
+            "UPDATE jobs SET status='skipped', note=?, lease_until=NULL, updated=? "
+            "WHERE event_id=? AND stage=? AND status IN ('pending','failed','manual')",
+            (note, time.time(), event_id, stage))
+        return cur.rowcount
+
+    def open_stage(self, event_id: str) -> str | None:
+        """The stage a clip is currently stuck or waiting in (pending, failed or manual), if any."""
+        for stage in STAGES:
+            row = self.conn.execute("SELECT status FROM jobs WHERE event_id=? AND stage=?",
+                                    (event_id, stage)).fetchone()
+            if row and row["status"] in ("pending", "failed", "manual"):
+                return stage
+        return None
+
     def job(self, event_id: str, stage: str) -> sqlite3.Row | None:
         return self.conn.execute("SELECT * FROM jobs WHERE event_id=? AND stage=?",
                                  (event_id, stage)).fetchone()

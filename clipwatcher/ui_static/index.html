@@ -49,6 +49,7 @@ input.txt{flex:1;min-width:240px;border:1px solid var(--line);background:var(--s
 input.txt:focus{border-color:var(--accent);background:var(--card)}
 .btn{border:1px solid var(--line);background:var(--card);border-radius:12px;padding:10px 16px;cursor:pointer;font-weight:600}
 a.btn{color:inherit}
+.btn.sm{padding:4px 11px;font-size:12.5px;border-radius:9px}
 .btn:hover{background:var(--soft)}
 .btn.pri{background:var(--accent);border-color:var(--accent);color:#2a1200}
 .btn.pri:hover{filter:brightness(1.05)}
@@ -268,10 +269,18 @@ async function refresh(){
 }
 function renderEvents(el, rows, compact){
   if (!rows.length){ el.innerHTML = '<div class="empty">No spikes yet. They appear when chat jumps to 3x its normal pace.</div>'; return; }
-  el.innerHTML = "<table><thead><tr><th>Spike</th><th>Chat</th><th>Status</th></tr></thead><tbody>" + rows.map(r =>
+  const acts = r => r.open_stage && r.tone !== "live"
+    ? `<div class="row" style="gap:6px;justify-content:flex-end">${r.failed || /Retrying/.test(r.state) ? `<button class="btn sm" onclick="evAct('retry','${esc(r.id)}')">Retry</button>` : ""}<button class="btn sm" onclick="evAct('skip','${esc(r.id)}')">Skip</button></div>` : "";
+  el.innerHTML = "<table><thead><tr><th>Spike</th><th>Chat</th><th>Status</th><th></th></tr></thead><tbody>" + rows.map(r =>
     `<tr><td><div>${fmtTime(r.spike_ts)}</div><div class="hint mono">${esc(r.id)}</div></td>
      <td>${r.messages ?? "–"} msgs<div class="hint">${r.ratio ? r.ratio + "x of " + r.baseline : ""}</div></td>
-     <td><span class="chip ${r.tone}${r.tone==="live"?" pulse":""}"><span class="dot"></span>${esc(r.state)}</span>${r.error && !compact ? `<div class="err">${esc(r.error)}</div>` : ""}</td></tr>`).join("") + "</tbody></table>";
+     <td><span class="chip ${r.tone}${r.tone==="live"?" pulse":""}"><span class="dot"></span>${esc(r.state)}</span>${r.error && !compact ? `<div class="err">${esc(r.error)}</div>` : ""}</td>
+     <td>${acts(r)}</td></tr>`).join("") + "</tbody></table>";
+}
+async function evAct(kind, id){
+  const r = await api("/api/" + kind, {event_id: id});
+  toast(r.message || (r.ok ? "Done" : "Could not do that"));
+  refresh();
 }
 
 /* charts */

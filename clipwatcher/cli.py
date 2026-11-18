@@ -58,6 +58,11 @@ def build_parser() -> argparse.ArgumentParser:
     _common(p)
     p.add_argument("event_id")
     p.add_argument("stage", choices=("extract", "transcribe", "edit"))
+    p = sub.add_parser("skip", help="skip a stuck or unwanted clip (it is still backed up, never deleted)")
+    _common(p)
+    p.add_argument("event_id")
+    p.add_argument("stage", nargs="?", choices=("extract", "transcribe", "edit"),
+                   help="default: the stage the clip is waiting in")
     p = sub.add_parser("make-assets", help="generate the original sound library and index assets/")
     _common(p)
     p.add_argument("--force", action="store_true", help="regenerate files that already exist")
@@ -245,6 +250,26 @@ def cmd_retry(cfg, db, args):
     return 0 if n else 1
 
 
+def skip_job(db, event_id: str, stage: str | None = None) -> tuple[bool, str]:
+    """Skip a waiting/failed job. Skipping transcribe still edits; skipping edit still backs the clip up."""
+    from .worker import AFTER_TERMINAL
+    stage = stage or db.open_stage(event_id)
+    if stage is None:
+        return False, "nothing to skip for that clip (it is done or running)"
+    if not db.skip(event_id, stage):
+        return False, f"{stage} is running or already finished"
+    nxt = AFTER_TERMINAL.get(stage)
+    if nxt:
+        db.enqueue(event_id, nxt)
+    return True, f"skipped {stage}" + (f"; {nxt} queued" if nxt else "")
+
+
+def cmd_skip(cfg, db, args):
+    ok, msg = skip_job(db, args.event_id, args.stage)
+    print(msg)
+    return 0 if ok else 1
+
+
 def cmd_finish(cfg, db, args):
     from .editor import finish
     problems = finish(cfg, db, args.event_id)
@@ -343,5 +368,5 @@ COMMANDS = {
     "status": cmd_status, "check": cmd_check, "detect-file": cmd_detect_file,
     "retry": cmd_retry, "finish": cmd_finish, "next-edit": cmd_next_edit,
     "make-assets": cmd_make_assets, "storage": cmd_storage, "audiodetect": cmd_audiodetect,
-    "ui": lambda cfg, db, args: cmd_ui(cfg, db, args),
+    "ui": lambda cfg, db, args: cmd_ui(cfg, db, args), "skip": cmd_skip,
 }

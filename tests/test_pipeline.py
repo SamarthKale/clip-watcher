@@ -144,6 +144,22 @@ class QueueTests(unittest.TestCase):
             self.db.add_event(ev, "c", float(i), float(i), {})
         self.assertEqual(self.db.claim("extract", 60)["event_id"], "c-a")
 
+    def test_skip_moves_on_and_never_touches_running_jobs(self):
+        from clipwatcher.cli import skip_job
+        self.db.add_event("c-s", "c", 1.0, 1.0, {})
+        job = self.db.claim("extract", 60)  # running
+        self.assertFalse(skip_job(self.db, "c-s")[0])
+        self.db.fail(job["id"], "boom", max_attempts=1)  # failed
+        ok, msg = skip_job(self.db, "c-s")
+        self.assertTrue(ok, msg)
+        self.assertEqual(self.db.job("c-s", "extract")["status"], "skipped")
+        self.assertIsNone(self.db.open_stage("c-s"))
+        # skipping a waiting edit still queues the backup stage
+        self.db.enqueue("c-s", "edit")
+        self.assertEqual(self.db.open_stage("c-s"), "edit")
+        self.assertTrue(skip_job(self.db, "c-s")[0])
+        self.assertEqual(self.db.job("c-s", "archive")["status"], "pending")
+
     def test_crashed_worker_lease_expires(self):
         self.db.add_event("c-2", "c", 1.0, 1.0, {})
         self.db.claim("extract", -1)  # lease already expired = worker died
