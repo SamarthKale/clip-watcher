@@ -122,7 +122,8 @@ export function buildApp(init: AppInit): FastifyInstance {
   registerPipelineRoutes(app);
 
   // The built React UI (npm run build:ui). Absent in tests and during API-only development.
-  const uiDir = path.resolve(process.cwd(), 'dist', 'ui');
+  // The installed app keeps it next to the bundled server and points here with LOCALTUBE_UI_DIR.
+  const uiDir = process.env.LOCALTUBE_UI_DIR ? path.resolve(process.env.LOCALTUBE_UI_DIR) : path.resolve(process.cwd(), 'dist', 'ui');
   if (fs.existsSync(path.join(uiDir, 'index.html'))) {
     void app.register(fastifyStatic, { root: uiDir });
     app.setNotFoundHandler((req, reply) =>
