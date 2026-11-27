@@ -1,11 +1,44 @@
 import { useEffect, useRef, useState } from 'react';
 import { motion } from 'motion/react';
-import { errorText } from '../api';
+import { api, errorText } from '../api';
 import { AnimatedNumber, Button, Card, Icon, LiveDot, Notice, PageHeader } from '../components/ui';
 import { fmtClock, pipe, usePipelinePoll, type ChatState, type LogLine, type PipelineState, type SetupStatus } from '../pipeline';
 import { SpikeTable } from './Spikes';
 
 const CHANNEL_KEY = 'clipper-channel';
+
+/** Claude edits the Shorts. Set up once: Anthropic's official installer, then the user's own sign-in. */
+function ClaudeSetup({ onDone }: { onDone: () => void }) {
+  const [step, setStep] = useState<'start' | 'installing' | 'signin'>('start');
+  const [err, setErr] = useState('');
+  const run = async (what: 'install' | 'signin') => {
+    setErr('');
+    try {
+      await api.post('/api/claude/' + what);
+      setStep(what === 'install' ? 'installing' : 'signin');
+      if (what === 'signin') setTimeout(onDone, 4000);
+    } catch (e) { setErr(errorText(e)); }
+  };
+  return (
+    <Card className="mb-4">
+      <div className="flex flex-wrap items-start gap-4">
+        <div className="min-w-64 flex-1">
+          <div className="flex items-center gap-2 text-sm font-semibold"><Icon name="scissors" className="h-4 w-4 text-indigo-600" />Set up Claude</div>
+          <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+            {step === 'start' && <>Claude is the editor that turns each spike into a finished Short. Setting it up installs Claude Code with Anthropic's official installer, then you sign in with your own Claude account.</>}
+            {step === 'installing' && <>A window opened and is installing Claude Code. When it says Done, press <b>Sign in to Claude</b>.</>}
+            {step === 'signin' && <>Claude opened in its own window. Follow its steps to sign in, then close it. Spikecut finds Claude by itself.</>}
+          </p>
+          {err && <p className="mt-1 text-sm text-red-600">{err}</p>}
+        </div>
+        <div className="flex gap-2">
+          {step === 'start' && <Button variant="primary" onClick={() => run('install')}>Set up Claude</Button>}
+          <Button onClick={() => run('signin')}>Sign in to Claude</Button>
+        </div>
+      </div>
+    </Card>
+  );
+}
 
 function Chip({ tone, pulse, children }: { tone: 'ok' | 'wait' | 'live' | 'bad'; pulse?: boolean; children: React.ReactNode }) {
   const t = {
@@ -141,11 +174,12 @@ export function Home() {
     <div>
       <PageHeader title="Home" subtitle={st?.channel ? (st.live ? `Recording ${st.channel} since ${fmtClock(st.live_since)}.` : `Channel: ${st.channel}.`) + ` ${st.stats.shorts_total} Shorts made in total.` : 'Paste a Twitch channel and press Start watching.'} />
 
-      {setup.data && (!setup.data.ok || (setup.data.backup_drive && !setup.data.backup_drive.ok)) && (
+      {setup.data?.tools.some((t) => t.name === 'claude' && !t.ok) && <ClaudeSetup onDone={setup.reload} />}
+      {setup.data && (setup.data.tools.some((t) => !t.ok && t.name !== 'claude') || (setup.data.backup_drive && !setup.data.backup_drive.ok)) && (
         <Notice tone="warn" className="mb-4">
           <b>Setup needed.</b>
           <ul className="mt-1 list-disc pl-5">
-            {setup.data.tools.filter((t) => !t.ok).map((t) => <li key={t.name}><b>{t.name}</b> was not found (needed for {t.needed_for}). Get it from {t.hint}.</li>)}
+            {setup.data.tools.filter((t) => !t.ok && t.name !== 'claude').map((t) => <li key={t.name}><b>{t.name}</b> was not found (needed for {t.needed_for}). Get it from {t.hint}.</li>)}
             {setup.data.backup_drive && !setup.data.backup_drive.ok && <li>The backup drive {setup.data.backup_drive.path} is not available: {setup.data.backup_drive.why}</li>}
           </ul>
         </Notice>

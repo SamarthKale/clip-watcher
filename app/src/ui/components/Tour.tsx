@@ -276,7 +276,7 @@ export const TOUR_STEPS: TourStep[] = [
       <>
         <ol className="mt-1 space-y-2.5">
           {[
-            ['Check Home for a Setup needed panel', 'and install anything it lists.'],
+            ['Set up Claude on Home', 'once, and sign in with your own Claude account.'],
             ['Connect your YouTube account', 'and confirm the channel.'],
             ['Pick a publishing mode', 'in Settings (Review first is a safe start).'],
             ['Paste a Twitch channel on Home', 'and press Start watching.'],
