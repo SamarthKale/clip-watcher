@@ -25,6 +25,10 @@ export const SettingsSchema = z.object({
   autoVisibility: z.enum(['private', 'unlisted', 'public']).default('private'),
   /** The Clip Watcher Shorts library, registered as a watched folder automatically. */
   libraryDir: z.string().default(''),
+  /** The guided tour opens by itself until it has been finished or skipped once. */
+  tourSeen: z.boolean().default(false),
+  /** Colour theme of the app (all pastel and matte). */
+  theme: z.enum(['lavender', 'sage', 'clay', 'mist']).default('lavender'),
 });
 export type Settings = z.infer<typeof SettingsSchema>;
 export const SettingsPatchSchema = SettingsSchema.partial().strict();

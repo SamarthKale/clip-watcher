@@ -1,95 +1,330 @@
 @import 'tailwindcss';
 
+/* Dark mode follows a class (set from the system setting in a normal browser). The desktop window is
+   always the light Spikecut look, so a dark Windows theme never turns its panels dark. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ------------------------------------------------------------------------------------------
+   Spikecut colour themes: pastel and matte.
+   Every theme is a dusty, low-saturation accent scale; surfaces are flat (no gloss, no glow).
+   Tailwind's indigo scale *is* the accent, so retinting it restyles every page at once.
+   Lavender is the default; Sage, Clay and Mist are picked in Settings -> Appearance
+   (html[data-theme]). "Live" is a soft rose in every theme.
+   ------------------------------------------------------------------------------------------ */
+@theme {
+  --font-sans: 'Segoe UI Variable Text', 'Segoe UI Variable', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --font-display: 'Segoe UI Variable Display', 'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif;
+  /* Lavender */
+  --color-indigo-50: #f6f4fb;
+  --color-indigo-100: #eeeaf7;
+  --color-indigo-200: #ddd6ef;
+  --color-indigo-300: #c6bce3;
+  --color-indigo-400: #a99cd2;
+  --color-indigo-500: #8f82c0;
+  --color-indigo-600: #7a6dad;
+  --color-indigo-700: #655a94;
+  --color-indigo-800: #4f4775;
+  --color-indigo-900: #3d375a;
+  --color-indigo-950: #26223a;
+  /* status colours, softened to match: sage green, honey, dusty red, mist blue */
+  --color-emerald-50: #f1f6f2;
+  --color-emerald-100: #e1ede4;
+  --color-emerald-200: #c6dccc;
+  --color-emerald-300: #a3c5ad;
+  --color-emerald-400: #80ab8d;
+  --color-emerald-500: #659274;
+  --color-emerald-600: #52795f;
+  --color-emerald-700: #43624e;
+  --color-emerald-800: #364f3f;
+  --color-emerald-900: #2b3f33;
+  --color-emerald-950: #1a261f;
+  --color-amber-50: #fbf7ee;
+  --color-amber-100: #f5ecd6;
+  --color-amber-200: #ead8ae;
+  --color-amber-300: #dcbf81;
+  --color-amber-400: #cba55d;
+  --color-amber-500: #b58c45;
+  --color-amber-600: #977238;
+  --color-amber-700: #795b2e;
+  --color-amber-800: #604926;
+  --color-amber-900: #4b3a1f;
+  --color-amber-950: #2d2213;
+  --color-red-50: #fbf3f3;
+  --color-red-100: #f5e3e3;
+  --color-red-200: #eac6c6;
+  --color-red-300: #dba3a3;
+  --color-red-400: #c98080;
+  --color-red-500: #b46565;
+  --color-red-600: #9a5252;
+  --color-red-700: #7f4343;
+  --color-red-800: #663737;
+  --color-red-900: #502d2d;
+  --color-red-950: #301a1a;
+  --color-sky-50: #f3f6fa;
+  --color-sky-100: #e6edf5;
+  --color-sky-200: #cfdcea;
+  --color-sky-300: #b0c4dc;
+  --color-sky-400: #8ea8c8;
+  --color-sky-500: #728db1;
+  --color-sky-600: #5f789b;
+  --color-sky-700: #4e6380;
+  --color-sky-800: #3f4f66;
+  --color-sky-900: #313e50;
+  --color-sky-950: #1e2632;
+  /* violet (used for 'working' states) follows the theme accent */
+  --color-violet-50: var(--color-indigo-50);
+  --color-violet-100: var(--color-indigo-100);
+  --color-violet-200: var(--color-indigo-200);
+  --color-violet-300: var(--color-indigo-300);
+  --color-violet-400: var(--color-indigo-400);
+  --color-violet-500: var(--color-indigo-500);
+  --color-violet-600: var(--color-indigo-600);
+  --color-violet-700: var(--color-indigo-700);
+  --color-violet-800: var(--color-indigo-800);
+  --color-violet-900: var(--color-indigo-900);
+  --color-violet-950: var(--color-indigo-950);
+  /* live: soft rose */
+  --color-coral-400: #e8acac;
+  --color-coral-500: #d98c8c;
+  --color-coral-600: #bd6f6f;
+}
+html[data-theme='sage'] {
+  --color-indigo-50: #f3f7f4;
+  --color-indigo-100: #e6efe8;
+  --color-indigo-200: #cfe0d3;
+  --color-indigo-300: #b0cbb7;
+  --color-indigo-400: #8fb199;
+  --color-indigo-500: #73977e;
+  --color-indigo-600: #5f8269;
+  --color-indigo-700: #4d6b56;
+  --color-indigo-800: #3d5545;
+  --color-indigo-900: #2f4236;
+  --color-indigo-950: #1c2921;
+}
+html[data-theme='clay'] {
+  --color-indigo-50: #fbf5f2;
+  --color-indigo-100: #f6e9e2;
+  --color-indigo-200: #ecd2c5;
+  --color-indigo-300: #dfb5a1;
+  --color-indigo-400: #cd957c;
+  --color-indigo-500: #b97b61;
+  --color-indigo-600: #a2664e;
+  --color-indigo-700: #865440;
+  --color-indigo-800: #6a4334;
+  --color-indigo-900: #533529;
+  --color-indigo-950: #33201a;
+}
+html[data-theme='mist'] {
+  --color-indigo-50: #f3f6fa;
+  --color-indigo-100: #e6edf5;
+  --color-indigo-200: #cfdcea;
+  --color-indigo-300: #b0c4dc;
+  --color-indigo-400: #8ea8c8;
+  --color-indigo-500: #728db1;
+  --color-indigo-600: #5f789b;
+  --color-indigo-700: #4e6380;
+  --color-indigo-800: #3f4f66;
+  --color-indigo-900: #313e50;
+  --color-indigo-950: #1e2632;
+}
+
 :root {
-  color-scheme: light dark;
+  color-scheme: light;
+}
+:root.dark {
+  color-scheme: dark;
 }
 body {
-  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-family: var(--font-sans);
+  font-feature-settings: 'ss01', 'cv11';
+  -webkit-font-smoothing: antialiased;
+}
+h1,
+h2,
+h3,
+.brand-word {
+  font-family: var(--font-display);
+}
+/* numbers line up and don't jiggle while they count */
+.tabular,
+table {
+  font-variant-numeric: tabular-nums;
+}
+::selection {
+  background: var(--color-indigo-200);
+}
+/* native checkboxes, radios and sliders use the theme accent instead of the system blue */
+input,
+progress {
+  accent-color: var(--color-indigo-600);
+}
+
+/* Primary buttons: one flat, matte fill. No gradient, no glow. */
+.btn-primary {
+  background-color: var(--color-indigo-600);
+  box-shadow: 0 1px 1px rgb(30 27 40 / 0.08);
+}
+.btn-primary:hover:not(:disabled) {
+  background-color: var(--color-indigo-700);
+}
+
+/* The "live" dot: a soft rose core with a ring that ripples outwards. */
+.live-dot {
+  position: relative;
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 9999px;
+  background: currentColor;
+}
+.live-dot::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: currentColor;
+  animation: live-ripple 1.6s cubic-bezier(0.2, 0.6, 0.3, 1) infinite;
+}
+@keyframes live-ripple {
+  from {
+    transform: scale(1);
+    opacity: 0.55;
+  }
+  to {
+    transform: scale(3);
+    opacity: 0;
+  }
+}
+
+/* The tour card is frosted glass too, but denser than the panels so its text stays crisp. */
+.tour-card {
+  background: #fffefb;
+}
+html:not(.dark) .tour-card {
+  background: rgb(255 255 255 / 0.86);
+  backdrop-filter: blur(32px) saturate(1.3);
+  -webkit-backdrop-filter: blur(32px) saturate(1.3);
+  border-color: rgb(255 255 255 / 0.75) !important;
+}
+.dark .tour-card {
+  background: #18181b;
+}
+
+/* The tour points at a sidebar item with a soft outline that breathes. */
+.tour-target {
+  box-shadow: 0 0 0 2px var(--color-indigo-400), 0 0 0 6px var(--color-indigo-100);
+  animation: tour-glow 1.8s ease-in-out infinite;
+}
+@keyframes tour-glow {
+  50% {
+    box-shadow: 0 0 0 2px var(--color-indigo-400), 0 0 0 9px var(--color-indigo-50);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .live-dot::after,
+  .tour-target,
+  .animate-pulse,
+  .animate-spin {
+    animation: none !important;
+  }
 }
 
 /* ------------------------------------------------------------------------------------------
-   Glass mode. The desktop app (Electron) opens a see-through window with Windows acrylic behind
-   the page, so the real desktop shows through, blurred. The page itself is transparent and every
-   panel is frosted glass over it. A plain browser keeps the normal solid theme.
-   Tailwind v4 colours are CSS variables, so retinting them here restyles every page at once.
+   Frosted matte glass (the light look, in the desktop window and in a browser).
+   Behind everything sits a soft pastel backdrop in the theme's colours. Panels are frosted glass
+   over it: translucent white, a strong blur, a thin light edge and a soft shadow. Matte means no
+   specular shine and no glow; the glass diffuses, it doesn't reflect.
    ------------------------------------------------------------------------------------------ */
-html.glass {
-  color-scheme: dark;
-  --color-zinc-50: rgb(255 255 255 / 0.05);
-  --color-zinc-100: rgb(255 255 255 / 0.08);
-  --color-zinc-200: rgb(255 255 255 / 0.16);
-  --color-zinc-300: rgb(255 255 255 / 0.2);
-  --color-zinc-700: rgb(255 255 255 / 0.2);
-  --color-zinc-800: rgb(255 255 255 / 0.13);
-  --color-zinc-900: rgb(18 18 28 / 0.46);
-  --color-zinc-950: rgb(8 8 14 / 0.34);
-}
-html.glass .bg-white {
-  background-color: rgb(255 255 255 / 0.1);
-}
-html.glass nav[aria-label='Main'] a:not([aria-current]) {
-  color: rgb(228 228 231 / 0.9);
-}
-html.glass nav[aria-label='Main'] a:not([aria-current]):hover {
-  background: rgb(255 255 255 / 0.1);
-}
-html.glass,
-html.glass body {
-  background: transparent !important;
-  color: #f4f4f5;
-}
-/* a soft colour wash so panels have something to refract; the desktop still shows through */
-html.glass body::before {
+html:not(.dark) body::before {
   content: '';
   position: fixed;
   inset: 0;
   z-index: -1;
   pointer-events: none;
   background:
-    radial-gradient(60rem 36rem at 12% -10%, rgb(99 102 241 / 0.22), transparent 60%),
-    radial-gradient(50rem 32rem at 100% 110%, rgb(168 85 247 / 0.18), transparent 60%);
+    radial-gradient(52rem 40rem at 2% -8%, var(--color-indigo-300), transparent 70%),
+    radial-gradient(44rem 34rem at 104% 6%, color-mix(in srgb, var(--color-indigo-300) 30%, rgb(236 194 178)), transparent 70%),
+    radial-gradient(54rem 40rem at 66% 112%, color-mix(in srgb, var(--color-indigo-300) 30%, rgb(176 212 199)), transparent 70%),
+    radial-gradient(36rem 28rem at 34% 58%, color-mix(in srgb, var(--color-indigo-200) 80%, transparent), transparent 70%),
+    color-mix(in srgb, var(--color-indigo-100) 55%, rgb(245 242 236));
 }
-html.glass nav[aria-label='Main'],
-html.glass header {
-  backdrop-filter: blur(26px) saturate(170%);
-  -webkit-backdrop-filter: blur(26px) saturate(170%);
+html:not(.dark) body {
+  background-color: transparent;
 }
-html.glass [class*='rounded-xl'][class*='border'],
-html.glass [class*='rounded-2xl'][class*='border'] {
-  backdrop-filter: blur(22px) saturate(160%);
-  -webkit-backdrop-filter: blur(22px) saturate(160%);
-  box-shadow: 0 10px 34px rgb(0 0 0 / 0.28), inset 0 1px 0 rgb(255 255 255 / 0.14);
+html:not(.dark) .bg-white {
+  background-color: rgb(255 255 255 / 0.55);
+}
+/* keep the hover state of white buttons (this rule sits outside Tailwind's layers, so it would win) */
+html:not(.dark) .bg-white[class*='hover:bg-']:hover:not(:disabled) {
+  background-color: rgb(255 255 255 / 0.85);
+}
+/* cards, side panels and dialogs: frosted glass */
+html:not(.dark) [class*='rounded-xl'][class*='border'].bg-white,
+html:not(.dark) [class*='rounded-2xl'][class*='border'].bg-white,
+html:not(.dark) [role='dialog'].bg-white {
+  background-color: rgb(255 255 255 / 0.42);
+  backdrop-filter: blur(26px) saturate(1.3);
+  -webkit-backdrop-filter: blur(26px) saturate(1.3);
+  border-color: rgb(255 255 255 / 0.8) !important;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.6),
+    0 0 0 1px rgb(40 36 30 / 0.04),
+    0 12px 32px -14px rgb(40 36 30 / 0.18);
+}
+html:not(.dark) [role='dialog'].bg-white {
+  background-color: rgb(255 255 255 / 0.72);
+}
+html:not(.dark) nav[aria-label='Main'] {
+  background: rgb(255 255 255 / 0.3);
+  border-color: rgb(255 255 255 / 0.6);
+}
+html:not(.dark) nav[aria-label='Main'],
+html:not(.dark) header {
+  backdrop-filter: blur(28px) saturate(1.3);
+  -webkit-backdrop-filter: blur(28px) saturate(1.3);
+}
+html:not(.dark) input:not([type='checkbox']):not([type='radio']):not([type='range']),
+html:not(.dark) textarea,
+html:not(.dark) select {
+  background-color: rgb(255 255 255 / 0.7);
+}
+
+/* ------------------------------------------------------------------------------------------
+   Window mode (the desktop app). Electron opens a see-through window with Windows acrylic in its
+   light tint. The pastel backdrop is laid over it part-transparent, so the blurred desktop shows
+   through the whole window, and the frosted panels sit on top.
+   ------------------------------------------------------------------------------------------ */
+html.glass {
+  color-scheme: light;
+  --color-zinc-50: rgb(255 255 255 / 0.4);
+  --color-zinc-100: rgb(40 36 30 / 0.05);
+  --color-zinc-200: rgb(40 36 30 / 0.08);
+  --color-zinc-300: rgb(40 36 30 / 0.13);
+}
+html.glass,
+html.glass body {
+  background: transparent !important;
+  color: #26241f;
+}
+html.glass body::before {
+  opacity: 0.86;
 }
 html.glass [class*='border-zinc-200'],
 html.glass [class*='border-zinc-300'] {
-  border-color: rgb(255 255 255 / 0.16);
-}
-html.glass input,
-html.glass textarea,
-html.glass select {
-  color: #f4f4f5;
-  background-color: rgb(255 255 255 / 0.08);
-}
-html.glass option {
-  background: #1c1c26;
-  color: #f4f4f5;
-}
-html.glass ::placeholder {
-  color: rgb(212 212 216 / 0.55);
-}
-html.glass .text-zinc-500 {
-  color: rgb(212 212 216 / 0.72);
+  border-color: rgb(40 36 30 / 0.08);
 }
 html.glass ::-webkit-scrollbar {
   width: 10px;
   height: 10px;
 }
 html.glass ::-webkit-scrollbar-thumb {
-  background: rgb(255 255 255 / 0.22);
+  background: rgb(40 36 30 / 0.16);
   border-radius: 8px;
   border: 2px solid transparent;
   background-clip: content-box;
 }
+
 /* the title bar of the frameless window: drag here, window buttons are drawn by Windows */
 #titlebar {
   display: none;
@@ -97,16 +332,23 @@ html.glass ::-webkit-scrollbar-thumb {
 html.glass #titlebar {
   display: flex;
   align-items: center;
+  gap: 8px;
   position: fixed;
   inset: 0 0 auto 0;
   height: 36px;
   padding: 0 14px;
   z-index: 60;
+  font-family: var(--font-display);
   font-size: 12px;
-  letter-spacing: 0.02em;
-  color: rgb(228 228 231 / 0.8);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: rgb(38 36 31 / 0.72);
   -webkit-app-region: drag;
   user-select: none;
+}
+html.glass #titlebar img {
+  width: 16px;
+  height: 16px;
 }
 html.glass body {
   padding-top: 36px;
@@ -114,4 +356,7 @@ html.glass body {
 html.glass nav[aria-label='Main'] {
   top: 36px !important;
   height: calc(100vh - 36px) !important;
+}
+html.glass [data-tour-layer] {
+  top: 36px;
 }

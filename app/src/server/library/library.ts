@@ -25,7 +25,7 @@ export function ensureLibraryFolder(db: Db, dir: string): Folder {
   if (!stored || JSON.parse(stored.value) !== dir) {
     db.prepare("INSERT INTO settings(key, value) VALUES('libraryDir', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").run(JSON.stringify(dir));
   }
-  db.prepare("UPDATE folders SET display_name = 'Clip Watcher Shorts', monitor_enabled = 1 WHERE id = ?").run(f.id);
+  db.prepare("UPDATE folders SET display_name = 'Spikecut Shorts', monitor_enabled = 1 WHERE id = ?").run(f.id);
   applyPublishMode(db);
   return libraryFolder(db) ?? f;
 }

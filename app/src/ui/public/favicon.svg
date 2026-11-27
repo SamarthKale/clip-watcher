@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 64 64">
+  <defs>
+    <mask id="m">
+      <rect width="64" height="64" fill="#fff"/>
+      <line x1="31" y1="31.5" x2="50" y2="19.5" stroke="#000" stroke-width="3.4" stroke-linecap="round"/>
+    </mask>
+  </defs>
+  <rect width="64" height="64" rx="16" fill="#8579b8"/>
+  <path d="M12 38 H21 L25 33 L29 38 H33 L40 15 L47 38 H52" mask="url(#m)" fill="none" stroke="#fffefb" stroke-width="4.4" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="50.5" cy="14" r="3.4" fill="#ecb4b4"/>
+</svg>

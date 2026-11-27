@@ -27,7 +27,7 @@ export function Accounts() {
       <ErrorBanner error={error ?? d.error} />
       <Card className="mb-4 space-y-3">
         <h2 className="font-semibold">Google OAuth client</h2>
-        <p className="text-sm text-zinc-500">Create a "Desktop app" OAuth client in the Google Cloud Console for a project with the YouTube Data API v3 enabled, then paste its client ID here. LocalTube uses the browser sign-in flow with PKCE and requests only the YouTube upload and read-only scopes.</p>
+        <p className="text-sm text-zinc-500">Create a "Desktop app" OAuth client in the Google Cloud Console for a project with the YouTube Data API v3 enabled, then paste its client ID here. Spikecut uses the browser sign-in flow with PKCE and requests only the YouTube upload and read-only scopes.</p>
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label={d.data?.clientIdSet ? 'Client ID (saved; enter a new one to replace)' : 'Client ID'}><input className={inputCls} value={clientId} onChange={(e) => setClientId(e.target.value)} placeholder="1234-abc.apps.googleusercontent.com" /></Field>
           <Field label="Client secret (only if Google issued one)"><input className={inputCls} type="password" autoComplete="off" value={clientSecret} onChange={(e) => setClientSecret(e.target.value)} /></Field>
@@ -60,7 +60,7 @@ export function Accounts() {
         </ul>
         {guidance && <p className="rounded-md bg-zinc-100 p-3 text-sm dark:bg-zinc-800">{guidance}</p>}
       </Card>
-      <p className="text-xs text-zinc-500">Before bulk publishing, confirm the channel name above is the one you intend. LocalTube never uploads until a channel is confirmed.</p>
+      <p className="text-xs text-zinc-500">Before bulk publishing, confirm the channel name above is the one you intend. Spikecut never uploads until a channel is confirmed.</p>
     </div>
   );
 }

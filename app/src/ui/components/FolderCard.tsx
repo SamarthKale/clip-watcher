@@ -31,7 +31,7 @@ export function FolderCard({ folder, profiles, geminiReady, enhanceDefault, onCh
     }
   };
   const remove = async () => {
-    if (!confirm(`Remove "${folder.display_name}" from LocalTube?\n\nYour video files are NOT deleted, and upload history is kept.`)) return;
+    if (!confirm(`Remove "${folder.display_name}" from Spikecut?\n\nYour video files are NOT deleted, and upload history is kept.`)) return;
     try {
       await api.del(`/api/folders/${folder.id}`);
       onChange();
@@ -77,7 +77,7 @@ export function FolderCard({ folder, profiles, geminiReady, enhanceDefault, onCh
           <input type="checkbox" className="accent-violet-600" checked={enhance && geminiReady} disabled={!geminiReady} onChange={(e) => setEnhance(e.target.checked)} />
           Improve with Gemini
         </label>
-        <Button variant="danger" onClick={remove}>Remove from LocalTube</Button>
+        <Button variant="danger" onClick={remove}>Remove from Spikecut</Button>
         <span className="text-xs text-zinc-500">Last scan: {folder.last_scan_at ? fmtDate(folder.last_scan_at) : 'never'}</span>
         {result && <span className="text-xs text-zinc-600 dark:text-zinc-400" data-testid="scan-result">{result}</span>}
       </div>

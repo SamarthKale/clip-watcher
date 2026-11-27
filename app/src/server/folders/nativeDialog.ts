@@ -10,7 +10,7 @@ $owner.StartPosition = 'CenterScreen'
 $owner.Size = New-Object System.Drawing.Size(0,0)
 $owner.Show()
 $d = New-Object System.Windows.Forms.FolderBrowserDialog
-$d.Description = 'Choose a folder of MP4 videos for LocalTube'
+$d.Description = 'Choose a folder of MP4 videos for Spikecut'
 if ($d.ShowDialog($owner) -eq [System.Windows.Forms.DialogResult]::OK) { Write-Output $d.SelectedPath }
 $owner.Close()
 `;

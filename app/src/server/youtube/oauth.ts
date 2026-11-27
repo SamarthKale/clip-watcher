@@ -53,7 +53,7 @@ export interface BeginResult {
 }
 
 const PAGE = (msg: string) =>
-  `<!doctype html><meta charset="utf-8"><title>LocalTube</title><body style="font-family:system-ui;padding:3rem"><h2>${msg}</h2><p>You can close this tab and return to LocalTube.</p></body>`;
+  `<!doctype html><meta charset="utf-8"><title>Spikecut</title><body style="font-family:system-ui;padding:3rem"><h2>${msg}</h2><p>You can close this tab and return to Spikecut.</p></body>`;
 
 /** Starts a one-shot loopback listener and returns the Google consent URL to open in the browser. */
 export async function beginOAuth(cfg: { clientId: string; endpoints: GoogleEndpoints; timeoutMs?: number }): Promise<BeginResult> {
@@ -95,7 +95,7 @@ export async function beginOAuth(cfg: { clientId: string; endpoints: GoogleEndpo
       res.end(PAGE('Sign-in was not completed'), () => cleanup());
       return fail(new Error(`Google authorization failed: ${error ?? 'no code returned'}`));
     }
-    res.end(PAGE('LocalTube is connected'), () => cleanup());
+    res.end(PAGE('Spikecut is connected'), () => cleanup());
     finish({ code, verifier, redirectUri });
   });
 
@@ -147,7 +147,7 @@ async function tokenRequest(cfg: OAuthClient, params: Record<string, string>): P
 export async function exchangeCode(cfg: OAuthClient, p: { code: string; verifier: string; redirectUri: string }): Promise<Tokens> {
   const j = await tokenRequest(cfg, { grant_type: 'authorization_code', code: p.code, code_verifier: p.verifier, redirect_uri: p.redirectUri });
   if (typeof j.access_token !== 'string' || typeof j.refresh_token !== 'string') {
-    throw new OAuthError('Google did not return a refresh token; remove LocalTube from your Google account permissions and connect again', 'no_refresh_token');
+    throw new OAuthError('Google did not return a refresh token; remove this app from your Google account permissions and connect again', 'no_refresh_token');
   }
   return { accessToken: j.access_token, refreshToken: j.refresh_token, expiresAt: Date.now() + Number(j.expires_in ?? 3600) * 1000 };
 }

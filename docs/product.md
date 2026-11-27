@@ -1,8 +1,10 @@
-# Clip Watcher: the desktop product
+# Spikecut: the desktop product
+
+*Catch the spike. Cut the Short.*
 
 One app that records a stream (or takes a link to a finished one), finds the best moments, edits
 Shorts with Claude, writes the title, description and tags, and uploads them to YouTube after you
-approve them (or automatically, if you choose). It opens in a see-through glass window.
+approve them (or automatically, if you choose). It opens in a light window of frosted, matte glass over a soft pastel backdrop, with the desktop showing faintly through.
 
 ## Start it
 
@@ -11,12 +13,29 @@ cd app
 npm run desktop        # builds the UI and opens the window
 ```
 
-or double-click `Clip Watcher.cmd` in the project folder. The window starts the clipping pipeline's
+or double-click `Spikecut.cmd` in the project folder. The window starts the clipping pipeline's
 local API and the upload server itself, and stops them when you close it. If the pipeline is still
 watching a channel when you close the window, you are asked whether to stop it or keep it recording.
 
 Needs: Node 20+, Python 3.11+, and the tools listed under Home -> "Setup needed" if any is missing
 (streamlink, ffmpeg, whisper.cpp with its speech model, yt-dlp, Claude Code).
+
+## Brand
+
+| | |
+|---|---|
+| Name | Spikecut (internal names such as the `clipwatcher` package and data folders are unchanged) |
+| Mark | A chat-activity line that shoots up into a spike, cut by a diagonal slash, on a flat dusty-lavender tile with a soft rose "live" dot. Inside the app the tile follows the chosen theme. Source: `app/build/icon.svg`; `npm run icons` renders the PNG and `.ico` files. |
+| Colours | Pastel and matte. Four themes, picked in Settings -> Appearance: **Lavender** (default, `#7a6dad`), **Sage** (`#5f8269`), **Clay** (`#a2664e`), **Mist** (`#5f789b`). Soft rose for live and softened status colours. Surfaces are frosted matte glass (translucent, blurred, a thin light edge) over a soft pastel backdrop in the theme colours. No neon, gloss or glow. |
+| Type | Segoe UI Variable (built into Windows 11) |
+| Motion | The Motion library: page transitions, staggered cards, counters, the live ripple, the drawing logo on the splash screen. All of it is off when Windows "Animation effects" is off. |
+
+## First run and the tour
+
+The first time the app opens, a guided tour walks through every page: what Spikecut does, the five
+stages, and each page in the sidebar (each step opens that page and points at it). It ends with four steps
+to a first Short. Finishing or skipping it is remembered (`tourSeen` in the upload server's settings);
+**Take the tour** in the sidebar and in Settings opens it again.
 
 ## How the pieces fit
 
@@ -80,7 +99,7 @@ retries on a clip that keeps failing.
 
 ## Limits and honest caveats
 
-- The glass effect is Windows 11 acrylic: it blurs what is behind the window. It is not a fully clear window.
+- The glass effect is Windows 11 acrylic in its light tint: it blurs and brightens what is behind the window. It is not a fully clear window.
 - Hinglish transcription runs on the CPU here: about 45 s per minute of audio with the large model.
   A speech-to-text line that Whisper writes in the wrong script is repaired by the transliteration, not
   perfected; read the first few captions of a new streamer.

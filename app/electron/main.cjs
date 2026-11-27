@@ -1,6 +1,6 @@
 'use strict';
 /**
- * Clip Watcher desktop shell.
+ * Spikecut desktop shell.
  *
  * Starts two local servers and shows them in one see-through window:
  *   - the Python pipeline API   (python -m clipwatcher ui)   recording, spikes, clips, storage
@@ -56,12 +56,37 @@ async function waitFor(url, ms, ok = (r) => r.ok) {
   return false;
 }
 
-function splash(text, detail = '') {
-  const html = `<!doctype html><meta charset="utf-8"><body style="margin:0;height:100vh;display:grid;place-items:center;
-    font-family:Segoe UI,system-ui,sans-serif;color:#e4e4e7;background:rgba(10,10,18,.45);-webkit-app-region:drag">
-    <div style="text-align:center"><div style="font-size:22px;font-weight:600">Clip Watcher</div>
-    <div style="margin-top:10px;font-size:14px;opacity:.8">${text}</div>
-    <div style="margin-top:8px;font-size:12px;opacity:.55;max-width:520px">${detail}</div></div></body>`;
+const ICON = path.join(APP_DIR, 'build', process.platform === 'win32' ? 'icon.ico' : 'icon.png');
+const LOGO_SVG = (() => {
+  try { return fs.readFileSync(path.join(APP_DIR, 'build', 'icon.svg'), 'utf8'); } catch { return ''; }
+})();
+
+/** The start screen: the Spikecut mark draws its spike line, then the status underneath. */
+function splash(text, detail = '', failed = false) {
+  // The line draws itself; the cut and the coral dot land after it.
+  const mark = LOGO_SVG
+    .replace(/width="512" height="512"/, 'width="84" height="84"')
+    .replace('<path ', '<path pathLength="1" class="line" ')
+    .replace('<circle ', '<circle class="dot" ');
+  const html = `<!doctype html><meta charset="utf-8"><style>
+    body{margin:0;height:100vh;display:grid;place-items:center;font-family:'Segoe UI Variable Display','Segoe UI',system-ui,sans-serif;
+      color:#26241f;background:rgba(247,245,240,.9);-webkit-app-region:drag}
+    .wrap{text-align:center;animation:up .5s cubic-bezier(.16,1,.3,1) both}
+    .mark{filter:drop-shadow(0 6px 14px rgba(40,36,30,.12))}
+    .line{stroke-dasharray:1;stroke-dashoffset:1;animation:draw .9s .15s cubic-bezier(.65,0,.35,1) forwards}
+    .dot{transform-origin:50.5px 14px;transform:scale(0);animation:pop .45s 1s cubic-bezier(.34,1.56,.64,1) forwards}
+    .name{margin-top:18px;font-size:26px;font-weight:600;letter-spacing:-.02em}.name b{color:#7a6dad;font-weight:600}
+    .tag{margin-top:4px;font-size:13px;color:#7c776d}
+    .text{margin-top:26px;font-size:14px;color:${failed ? '#9a5252' : '#4a463e'}}
+    .detail{margin:8px auto 0;font-size:12px;color:#7c776d;max-width:560px;white-space:pre-wrap;-webkit-app-region:no-drag;user-select:text}
+    .bar{margin:18px auto 0;width:160px;height:3px;border-radius:3px;background:rgba(40,36,30,.08);overflow:hidden}
+    .bar i{display:block;height:100%;width:40%;border-radius:3px;background:#a99cd2;animation:slide 1.2s ease-in-out infinite}
+    @keyframes draw{to{stroke-dashoffset:0}}@keyframes pop{to{transform:scale(1)}}
+    @keyframes up{from{opacity:0;transform:translateY(10px)}}@keyframes slide{from{transform:translateX(-100%)}to{transform:translateX(250%)}}
+    @media (prefers-reduced-motion:reduce){*{animation:none!important}.line{stroke-dashoffset:0}.dot{transform:none}}
+    </style><body><div class="wrap"><div class="mark">${mark}</div>
+    <div class="name">Spike<b>cut</b></div><div class="tag">Catch the spike. Cut the Short.</div>
+    <div class="text">${text}</div>${failed ? '' : '<div class="bar"><i></i></div>'}<div class="detail">${detail}</div></div></body>`;
   return 'data:text/html;charset=utf-8,' + encodeURIComponent(html);
 }
 
@@ -119,7 +144,7 @@ async function startAppServer() {
 }
 
 function createWindow() {
-  nativeTheme.themeSource = 'dark';
+  nativeTheme.themeSource = 'light'; // the light acrylic tint that matches the Spikecut look
   // Fit the screen: a fixed size is cut off on a small or highly scaled display.
   const wa = screen.getPrimaryDisplay().workArea;
   const area = { width: wa.width, height: wa.height };
@@ -133,11 +158,12 @@ function createWindow() {
     minWidth: Math.min(980, area.width),
     minHeight: Math.min(640, area.height),
     show: false,
-    title: 'Clip Watcher',
+    title: 'Spikecut',
+    icon: ICON,
     backgroundColor: '#00000000',
     backgroundMaterial: 'acrylic', // Windows 11: the desktop behind the window, blurred
     titleBarStyle: 'hidden',
-    titleBarOverlay: { color: '#00000000', symbolColor: '#e4e4e7', height: 36 },
+    titleBarOverlay: { color: '#00000000', symbolColor: '#3f3f46', height: 36 },
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
@@ -164,7 +190,7 @@ function createWindow() {
     e.preventDefault();
     void confirmQuit();
   });
-  win.loadURL(splash('Starting…', 'Starting the clipping pipeline and the upload server.'));
+  win.loadURL(splash('Getting things ready…', 'Starting the clipping pipeline and the upload server.'));
 }
 
 async function pipelineIsRunning() {
@@ -183,8 +209,8 @@ async function confirmQuit() {
       buttons: ['Stop watching and quit', 'Keep recording in the background', 'Cancel'],
       defaultId: 0,
       cancelId: 2,
-      title: 'Clip Watcher',
-      message: 'The pipeline is still watching a channel.',
+      title: 'Spikecut',
+      message: 'Spikecut is still watching a channel.',
       detail: 'Stopping closes the recording cleanly. Keeping it running lets the stream continue to be recorded and clipped without this window.',
     });
     if (r === 2) return;
@@ -219,10 +245,15 @@ async function boot() {
     if (process.env.CLIPPER_DEBUG) win.webContents.openDevTools({ mode: 'detach' });
   } catch (e) {
     if (win && !win.isDestroyed()) {
-      await win.loadURL(splash('Clip Watcher could not start', String(e.message || e).replace(/[<>&]/g, ' ')));
+      await win.loadURL(splash('Spikecut could not start', String(e.message || e).replace(/[<>&]/g, ' '), true));
     }
   }
 }
+
+// The app was renamed to Spikecut; its browser data (remembered channel, window state) stays in the
+// folder it always used, so nothing is lost by the rename.
+app.setPath('userData', path.join(app.getPath('appData'), 'Clip Watcher'));
+app.setAppUserModelId('app.spikecut.desktop');
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();

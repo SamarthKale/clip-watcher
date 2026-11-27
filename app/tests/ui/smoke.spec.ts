@@ -43,6 +43,28 @@ test('add a folder, scan it, edit metadata by hand, and never expose the API key
   // The launch token is removed from the address bar after load; Home is the landing page.
   await expect(page.getByRole('heading', { name: 'Home' })).toBeVisible();
   await expect.poll(() => page.url()).not.toContain('token=');
+
+  // First run: the tour opens by itself, walks through the pages, and is remembered once skipped.
+  const tour = page.getByRole('dialog', { name: 'Spikecut tour' });
+  await expect(tour).toBeVisible();
+  await expect(tour).toContainText('Welcome to Spikecut');
+  await tour.getByRole('button', { name: 'Start the tour' }).click();
+  await expect(tour).toContainText('Five stages, fully automatic');
+  await tour.getByRole('button', { name: 'Next' }).click();
+  await expect(tour).toContainText('Start watching a channel');
+  await tour.getByRole('button', { name: 'Next' }).click();
+  await expect(tour).toContainText('Every moment chat exploded');
+  await expect(page.getByRole('heading', { name: 'Spikes & clips' })).toBeVisible();
+  await tour.getByRole('button', { name: 'Skip tour' }).click();
+  await expect(tour).toBeHidden();
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'Spikes & clips' })).toBeVisible();
+  await expect(tour).toBeHidden();
+  // ...and "Take the tour" opens it again whenever you want.
+  await page.getByRole('navigation', { name: 'Main' }).getByRole('button', { name: 'Take the tour' }).click();
+  await expect(tour).toContainText('Welcome to Spikecut');
+  await page.keyboard.press('Escape');
+  await expect(tour).toBeHidden();
   await open(page, 'dashboard');
   await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
   await expect(page.getByText('No data yet')).toBeVisible();
@@ -86,6 +108,12 @@ test('add a folder, scan it, edit metadata by hand, and never expose the API key
 
   // Settings: the Gemini key is write-only and never shown back.
   await nav(page, 'Settings');
+  // Appearance: a pastel theme applies at once and is remembered after a reload.
+  await page.getByRole('radio', { name: /Sage/ }).click();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'sage');
+  await page.reload();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'sage');
+  await expect(page.getByRole('radio', { name: /Sage/ })).toHaveAttribute('aria-checked', 'true');
   await page.getByText('Advanced: Gemini').click();
   await page.getByLabel('Gemini API key').fill('SECRET-KEY-VALUE-123');
   await page.getByRole('button', { name: 'Save key' }).click();
