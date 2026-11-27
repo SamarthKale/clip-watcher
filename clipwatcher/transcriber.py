@@ -19,7 +19,7 @@ import logging
 import re
 from pathlib import Path
 
-from . import media
+from . import media, romanize
 from .config import Config
 from .db import DB
 from .extractor import clip_dir
@@ -54,10 +54,30 @@ def shift_srt(text: str, offset: float) -> str:
     return "\n".join(repl(line) for line in text.splitlines()) + "\n"
 
 
+REPLACEMENT_CHAR = chr(0xFFFD)  # what a half-written multi-byte character decodes to
+
+
+def _words_from_segment_text(seg: dict) -> list[dict]:
+    """Words from a segment's text with timings spread over the segment by length."""
+    off = seg.get("offsets") or {}
+    t0, t1 = off.get("from", 0) / 1000, off.get("to", 0) / 1000
+    toks = (seg.get("text") or "").split()
+    total = sum(len(t) for t in toks) or 1
+    out, pos = [], 0
+    for t in toks:
+        a = t0 + (t1 - t0) * pos / total
+        pos += len(t)
+        out.append({"w": t, "start": round(a, 3), "end": round(t0 + (t1 - t0) * pos / total, 3), "p": None})
+    return out
+
+
 def words_from_whisper_json(data: dict) -> list[dict]:
     """Merge whisper.cpp tokens into words with start/end seconds (clip-relative)."""
     words: list[dict] = []
     for seg in data.get("transcription", []):
+        if any(REPLACEMENT_CHAR in tok.get("text", "") for tok in seg.get("tokens", [])):
+            words.extend(_words_from_segment_text(seg))  # multi-byte characters split across tokens
+            continue
         for tok in seg.get("tokens", []):
             text = tok.get("text", "")
             if not text or text.startswith("[_") or text.strip() in ("", "[BLANK_AUDIO]"):
@@ -118,11 +138,18 @@ def handle(cfg: Config, db: DB, job) -> Done | Skip:
     (out_dir / "transcript.recording.srt").write_text(shift_srt(srt, src_start), encoding="utf-8")
 
     words: list[dict] = []
+    detected = tr["language"] if tr["language"] != "auto" else None
     if json_path.exists():
         try:
-            words = words_from_whisper_json(read_json(json_path))
+            raw = read_json(json_path)
+            words = words_from_whisper_json(raw)
+            detected = (raw.get("result") or {}).get("language") or detected
         except (ValueError, KeyError) as e:
             log.warning("could not parse word timings: %s", e)
+    lang_class = romanize.classify_language(detected, [w["w"] for w in words])
+    for w in words:
+        if romanize.has_devanagari(w["w"]):
+            w["latin"] = romanize.to_latin(w["w"])  # captions are always Latin letters
     for w in words:
         w["rec_start"] = round(w["start"] + src_start, 3)
         w["rec_end"] = round(w["end"] + src_start, 3)
@@ -130,12 +157,15 @@ def handle(cfg: Config, db: DB, job) -> Done | Skip:
         "event_id": job["event_id"],
         "model": str(tr["model"]),
         "language": tr["language"],
+        "detected_language": detected,
+        "language_class": lang_class,
         "clip_source_start_s": src_start,
         "note": "start/end are seconds in clip.mp4; rec_start/rec_end are seconds in the source recording",
         "words": words,
     })
     meta["transcript"] = {"srt": "transcript.srt", "recording_srt": "transcript.recording.srt",
-                          "words": "words.json", "word_count": len(words), "model": str(tr["model"])}
+                          "words": "words.json", "word_count": len(words), "model": str(tr["model"]),
+                          "detected_language": detected, "language_class": lang_class}
     write_json(meta_path, meta)
-    log.info("transcribed %s: %d words", job["event_id"], len(words))
+    log.info("transcribed %s: %d words (%s)", job["event_id"], len(words), lang_class)
     return Done({"srt": str(srt_path), "words": len(words)}, next_stage="edit")

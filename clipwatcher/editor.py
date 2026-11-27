@@ -129,6 +129,9 @@ def prepare_job(cfg: Config, event_id: str) -> Path:
                        f"   Never under {min_len}s and never over {max_len}s; `finish` rejects anything outside.\n"
                        "   This overrides the playbook's per-type durations. Reach the length with real footage:\n"
                        "   the set-up, the moment, the reaction and the aftermath. Never pad, loop, freeze or slow down.")
+    tinfo = meta.get("transcript") or {}
+    language_line = (f"{tinfo.get('language_class', 'en')}, detected {tinfo.get('detected_language') or 'en'}"
+                     "; captions must be in Latin letters (Hinglish for Hindi speech), see the playbook")
     render_all_section = ""
     if cfg["edit"].get("render_all"):
         render_all_section = (
@@ -182,7 +185,7 @@ Follow the playbook in `{files['playbook']}` (read it first).
 {chat_lines}
 ```
 
-## Transcript
+## Transcript (language: {language_line})
 ```
 {transcript}
 ```

@@ -120,8 +120,10 @@ DEFAULTS: dict[str, Any] = {
     "transcribe": {
         "enabled": True,
         "whisper_cli": "whisper-cli",
-        "model": "models/ggml-medium.en.bin",
-        "language": "en",
+        # Multilingual model: Hindi, English and Hinglish are detected per clip ("auto"). Captions are
+        # always written in Latin letters. Use ggml-base.en.bin with language "en" for English only.
+        "model": "models/ggml-large-v3-turbo-q5_0.bin",
+        "language": "auto",
         "threads": 4,
         "extra_args": [],
     },

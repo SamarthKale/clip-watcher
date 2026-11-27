@@ -53,7 +53,7 @@ a `C:/...` path inside an ffmpeg filter string gets mangled.
 |---|---|
 | `python -m clipwatcher.editkit library [--type sfx\|music] [--tag comedy]` | licensed sounds you may use |
 | `python -m clipwatcher.editkit trimgraph --segments A-B,C-D` | ffmpeg trim/concat graph for your keep-list, producing `[vcut]` |
-| `python -m clipwatcher.editkit captions --words <words.json> --segments ... --out work/captions.ass --emphasis word1,word2 [--replace wrong=right] [--style karaoke\|pop\|clean] [--accent #FFD400] [--y 1250] [--max-words 3] [--font "Arial Black"]` | animated captions, word-highlighted, remapped onto your cut |
+| `python -m clipwatcher.editkit captions --words <words.json> --segments ... --out work/captions.ass --emphasis word1,word2 [--replace wrong=right] [--style karaoke\|pop\|clean] [--accent #FFD400] [--y 1250] [--max-words 3] [--romanized work/romanized.json] [--font "Arial Black"]` | animated captions, word-highlighted, remapped onto your cut |
 | `python -m clipwatcher.editkit audiomix --source <raw clip> --segments ... --out work/mix.wav [--music music/<id>] [--music-gain -14] [--music-mute A-B] [--sfx sfx/<id>@T[:gainDb]]...` | cleaned voice, ducked music bed and timed effects, normalized to -14 LUFS |
 | `python -m clipwatcher.editkit inspect short.mp4 --sheet work/inspect.jpg` | decode check, loudness, true peak, black, frozen and silent spans, contact sheet |
 | `python -m clipwatcher.editkit signals <raw clip>` | audio peaks, silences, scene changes, chat categories, moment guess, triage score |
@@ -149,6 +149,13 @@ it and it proves the moment.
 ## 5. Captions
 - Run `editkit captions` with your keep-list. Defaults: karaoke word highlight, Arial Black 88, thick
   outline, 1–3 words per card, pop-in animation.
+- **Language.** `words.json` has `language_class`: `en`, `hi` or `hinglish`. Captions are always in
+  Latin letters. English stays English. For Hindi or mixed speech, write the Hinglish spelling as people
+  type it ("bhai ye dekh", "kya baat hai", "nahi yaar"): save `work/romanized.json` (word index in
+  `words.json` -> text; only the words whose automatic `latin` spelling is wrong or odd) and pass
+  `--romanized work/romanized.json`. Never leave Devanagari in a caption; the tool transliterates
+  what you miss, but a human spelling reads better. Set `seo.language` to the class, and write the SEO
+  text in natural English or Hinglish to match how the streamer speaks.
 - **Fix transcription errors** with `--replace` (names, game terms, slang). Read every card in the
   printed report. Wrong captions kill credibility. Whisper mangles gaming vocabulary: agent and
   champion names, weapons, callouts ("A site", "heaven", "B main"), "ace", "1v3", "flash", "ult".

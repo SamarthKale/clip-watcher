@@ -27,7 +27,7 @@ import re
 import sys
 from pathlib import Path
 
-from . import media, reframe, signals, thumbs
+from . import media, reframe, romanize, signals, thumbs
 from .config import load_config
 from .soundlib import ASSETS_DIR, load_library, usable_items
 
@@ -127,9 +127,29 @@ def build_chunks(words: list[dict], segs, max_words: int, max_chars: int,
     return chunks
 
 
+def apply_latin(words: list[dict], romanized_path: str | None = None) -> list[dict]:
+    """Caption text for every word, always in Latin letters (Hinglish for Hindi speech).
+
+    Order of preference: Claude's `romanized.json` (word index -> text, or a list), the word's own
+    `latin` field from transcription, the word itself. Anything still in Devanagari is transliterated.
+    """
+    over: dict[int, str] = {}
+    if romanized_path and Path(romanized_path).exists():
+        raw = json.loads(Path(romanized_path).read_text(encoding="utf-8"))
+        if isinstance(raw, dict) and isinstance(raw.get("words"), (dict, list)):
+            raw = raw["words"]
+        items = raw.items() if isinstance(raw, dict) else enumerate(raw)
+        over = {int(k): str(v) for k, v in items if v not in (None, "")}
+    out = []
+    for i, w in enumerate(words):
+        text = over.get(i) or w.get("latin") or w["w"]
+        out.append({**w, "w": romanize.to_latin(text)})
+    return out
+
+
 def cmd_captions(a) -> None:
     data = json.loads(Path(a.words).read_text(encoding="utf-8"))
-    words = data["words"] if isinstance(data, dict) else data
+    words = apply_latin(data["words"] if isinstance(data, dict) else data, getattr(a, "romanized", None))
     total = max((w["end"] for w in words), default=0) + 1
     segs = parse_segments(a.segments, total)
     replacements = {}
@@ -516,6 +536,7 @@ def main(argv=None) -> None:
     c.add_argument("--accent", default="#FFD400", help="highlight colour for the active/emphasis word")
     c.add_argument("--emphasis", help="comma-separated words always shown in the accent colour, larger")
     c.add_argument("--replace", action="append", help="fix a transcription error: wrong=right (repeatable)")
+    c.add_argument("--romanized", help="romanized.json: word index -> Latin (Hinglish) text; overrides transcription")
     c.add_argument("--max-words", type=int, default=3)
     c.add_argument("--max-chars", type=int, default=18)
     c.add_argument("--no-upper", action="store_true")
