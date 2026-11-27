@@ -15,3 +15,6 @@ app/playwright-report/
 app/out/
 app/.env
 Shorts/
+app/release-res/
+app/build-cache/
+.superpowers/
