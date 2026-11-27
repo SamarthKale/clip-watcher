@@ -6,7 +6,36 @@ One app that records a stream (or takes a link to a finished one), finds the bes
 Shorts with Claude, writes the title, description and tags, and uploads them to YouTube after you
 approve them (or automatically, if you choose). It opens in a light window of frosted, matte glass over a soft pastel backdrop, with the desktop showing faintly through.
 
-## Start it
+## Install it (the release)
+
+Run `Spikecut-Setup-<version>.exe` from the GitHub release (see the README's Download section). The
+installed app is self-contained:
+
+| Folder (inside the install) | What |
+|---|---|
+| `resources/python` | Python's embeddable runtime with streamlink, its `._pth` pointing at the pipeline |
+| `resources/pipeline` | `clipwatcher` as compiled `.pyc` only, the edit skill pack, the CC0 sounds, `config.example.toml` |
+| `resources/tools`, `resources/models` | ffmpeg/ffprobe, whisper-cli, yt-dlp, the base English speech model |
+| `resources/node` | Node for the upload server (the database module's ready-made build matches it) |
+| `resources/app.asar(.unpacked)` | the Electron shell, the bundled server and the built UI, minified; no `.ts` |
+| `resources/LICENSES/NOTICES.txt` | each bundled program, its license and its source |
+
+Nothing is written inside the install. Recordings, clips, Shorts, `config.toml` and the upload
+database live in the **work folder** chosen on first run (remembered in `%APPDATA%\Clip Watcher\workfolder.json`;
+`SPIKECUT_WORK_DIR` overrides it). A new work folder gets a `config.toml` that uses the bundled model;
+a folder that already has one is never changed. A relative path in `config.toml` that isn't in the work
+folder falls back to the bundled copy (`CLIPPER_RESOURCES`).
+
+Claude Code is not bundled (Anthropic doesn't license it for repackaging, and each user signs in with
+their own account). Home shows **Set up Claude** while it is missing: it runs Anthropic's official
+installer (`irm https://claude.ai/install.ps1 | iex`) in a visible window, and **Sign in to Claude**
+opens Claude Code for its sign-in. `%USERPROFILE%\.local\bin` is on the pipeline's PATH, so a fresh
+install is found without restarting Spikecut.
+
+Build it: `cd app && npm run dist` (stages `app/release-res/` with `scripts/stage_resources.py`, then
+electron-builder NSIS into `app/out/`). The installer is per-user and unsigned.
+
+## Start it (from the repo)
 
 ```bash
 cd app

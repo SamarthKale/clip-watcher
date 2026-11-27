@@ -24,7 +24,6 @@ describe('installed app runtime', () => {
       isPackaged: true,
       resourcesPath: RES,
       appDir: APP,
-      execPath: RES + '\\..\\Spikecut.exe',
       env: { Path: 'C:\\Windows\\system32', PYTHONHOME: 'C:\\Python313', PYTHONPATH: 'C:\\mine', USERPROFILE: HOME },
       home: HOME,
       workDir: WORK,
@@ -51,16 +50,17 @@ describe('installed app runtime', () => {
     expect(env.CLIPPER_RESOURCES).toBe(RES);
   });
 
-  it('runs the bundled pipeline and the bundled server with Electron itself', () => {
+  it('runs the bundled pipeline, and the bundled server with the bundled Node', () => {
     const rt = packaged();
     expect(rt.root).toBe(WORK);
     expect(rt.config).toBe(WORK + '\\config.toml');
     expect(rt.dataDir).toBe(WORK + '\\data\\uploader');
     expect(rt.python).toBe(RES + '\\python\\python.exe');
-    expect(rt.server.cmd).toBe(RES + '\\..\\Spikecut.exe');
-    expect(rt.server.args).toEqual([APP + '\\dist\\server\\index.mjs']);
+    // its own Node: the database module's ready-made build matches it (none exists for Electron's)
+    expect(rt.server.cmd).toBe(RES + '\\node\\node.exe');
+    expect(rt.server.args).toEqual([APP + '.unpacked\\dist\\server\\index.mjs']);
     expect(rt.server.cwd).toBe(WORK);
-    expect(rt.server.env.ELECTRON_RUN_AS_NODE).toBe('1');
+    expect(rt.server.env.ELECTRON_RUN_AS_NODE).toBeUndefined();
     expect(rt.server.env.LOCALTUBE_UI_DIR).toBe(APP + '.unpacked\\dist\\ui');
     expect(rt.server.env.CLIPPER_RESOURCES).toBe(RES); // the server's ffmpeg calls see the same tools
   });

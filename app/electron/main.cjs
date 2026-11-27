@@ -266,7 +266,6 @@ async function boot() {
     isPackaged: app.isPackaged,
     resourcesPath: process.resourcesPath,
     appDir: APP_DIR,
-    execPath: process.execPath,
     env: process.env,
     home: app.getPath('home'),
     workDir,

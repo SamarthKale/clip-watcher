@@ -8,6 +8,8 @@
               the CC0 sound library and config.example.toml
   tools/      ffmpeg + ffprobe, whisper-cli + its DLLs, yt-dlp (copied from the repo's tools/ folder)
   models/     the small English speech model
+  node/       node.exe for the upload server: this machine's Node, whose ABI matches the ready-made
+              better-sqlite3 build in app/node_modules (there is none for Electron's ABI)
   LICENSES/   what each bundled program is, its license and where its source is
 
 Downloads (official sources only): the embeddable runtime from python.org, streamlink from PyPI.
@@ -47,6 +49,7 @@ REQUIRED = [
     "tools/ffmpeg/ffprobe.exe",
     "tools/whisper/whisper-cli.exe",
     "tools/yt-dlp/yt-dlp.exe",
+    "node/node.exe",
     f"models/{MODEL}",
     "LICENSES/NOTICES.txt",
 ]
@@ -115,6 +118,11 @@ def stage_tools() -> None:
             shutil.copy2(f, OUT / "tools" / "whisper" / f.name)
     (OUT / "tools" / "yt-dlp").mkdir(parents=True)
     shutil.copy2(src / "yt-dlp" / "yt-dlp.exe", OUT / "tools" / "yt-dlp" / "yt-dlp.exe")
+    node = shutil.which("node")
+    if not node:
+        raise SystemExit("node was not found; the upload server ships with this machine's Node")
+    (OUT / "node").mkdir(parents=True)
+    shutil.copy2(node, OUT / "node" / "node.exe")
     (OUT / "models").mkdir(parents=True)
     shutil.copy2(REPO / "models" / MODEL, OUT / "models" / MODEL)
 
@@ -139,6 +147,9 @@ FFmpeg (ffmpeg.exe, ffprobe.exe)
 {''.join('  ' + line + chr(10) for line in ff_license.strip().splitlines())}
 whisper.cpp (whisper-cli.exe and its DLLs) and the ggml speech model
   License: MIT. Source: https://github.com/ggml-org/whisper.cpp
+
+Node.js (node/node.exe)
+  License: MIT. Source: https://github.com/nodejs/node
 
 yt-dlp (yt-dlp.exe)
   License: The Unlicense (public domain). Source: https://github.com/yt-dlp/yt-dlp
@@ -172,6 +183,11 @@ def verify(stage: Path, run: bool = True) -> list[str]:
                                encoding="utf-8", errors="replace")
             if r.returncode:
                 problems.append(f"bundled python {' '.join(args)} failed: {(r.stderr or r.stdout).strip()[-300:]}")
+        r = subprocess.run([str(stage / "node" / "node.exe"), "-e",
+                            "new (require('better-sqlite3'))(':memory:').prepare('select 1').get()"],
+                           cwd=str(APP), capture_output=True, text=True, encoding="utf-8", errors="replace")
+        if r.returncode:
+            problems.append(f"bundled node cannot load better-sqlite3: {r.stderr.strip()[-300:]}")
         if list((stage / "pipeline").rglob("__pycache__")):
             problems.append("the bundled Python wrote __pycache__ into the pipeline")
     return problems

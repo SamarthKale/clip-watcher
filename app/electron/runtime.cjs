@@ -18,7 +18,7 @@ function withPath(env, prepend) {
   return out;
 }
 
-function resolveRuntime({ isPackaged, resourcesPath, appDir, execPath, env = {}, home = '', workDir }) {
+function resolveRuntime({ isPackaged, resourcesPath, appDir, env = {}, home = '', workDir }) {
   if (!isPackaged) {
     const root = env.CLIPPER_ROOT ? path.resolve(env.CLIPPER_ROOT) : path.resolve(appDir, '..');
     const childEnv = { ...env, PYTHONUTF8: '1', PYTHONPATH: [root, env.PYTHONPATH].filter(Boolean).join(';') };
@@ -52,11 +52,13 @@ function resolveRuntime({ isPackaged, resourcesPath, appDir, execPath, env = {},
     config: path.join(workDir, 'config.toml'),
     dataDir: path.join(workDir, 'data', 'uploader'),
     python: path.join(res, 'python', 'python.exe'),
+    // The server runs on Spikecut's own Node (resources/node): the database module ships a ready-made
+    // build for that Node, and none exists for Electron's. It and its node_modules sit unpacked.
     server: {
-      cmd: execPath,
-      args: [path.join(appDir, 'dist', 'server', 'index.mjs')],
+      cmd: path.join(res, 'node', 'node.exe'),
+      args: [path.join(appDir + '.unpacked', 'dist', 'server', 'index.mjs')],
       cwd: workDir,
-      env: { ...childEnv, ELECTRON_RUN_AS_NODE: '1', LOCALTUBE_UI_DIR: path.join(appDir + '.unpacked', 'dist', 'ui') },
+      env: { ...childEnv, LOCALTUBE_UI_DIR: path.join(appDir + '.unpacked', 'dist', 'ui') },
     },
     childEnv,
   };

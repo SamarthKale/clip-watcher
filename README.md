@@ -16,6 +16,29 @@ live stream -> recording (streamlink) -> chat log (Twitch IRC) -> 10 s chat buck
 
 **Nothing is ever uploaded or published automatically.** Every Short is a file for you to review.
 
+## Download (Windows 10/11, 64-bit)
+
+Get **`Spikecut-Setup-<version>.exe`** from the [latest release](https://github.com/SamarthKale/clip-watcher/releases/latest)
+and run it. It installs for your user only, with no admin prompt, and adds Start-menu and desktop
+shortcuts. It brings everything it needs: its own Python, ffmpeg, streamlink, yt-dlp, whisper and an
+English speech model. Your own Python or Node install doesn't matter.
+
+1. **"Windows protected your PC"?** The installer isn't code-signed yet, so SmartScreen warns about it.
+   Press **More info**, then **Run anyway**. You can check the download against the `.sha256` file
+   attached to the release.
+2. **First launch** asks where to keep recordings, clips and Shorts (default `Documents\Spikecut`).
+   Pick a drive with plenty of space. If you used Spikecut before, pick that folder to keep your work.
+3. **Set up Claude** on Home. Claude is the editor. The button installs Claude Code with Anthropic's
+   official installer, and **Sign in to Claude** signs you in with your own Claude account. Claude
+   Code itself isn't included in the installer: Anthropic doesn't license it for repackaging, and
+   each user signs in with their own account.
+4. Connect YouTube under **YouTube account**, then paste a Twitch channel on Home.
+
+Uninstalling (Settings -> Apps) removes the program and leaves your work folder alone.
+
+To build the installer yourself: `cd app`, then `npm run dist` (Windows; needs this repo's `tools/`
+and `models/ggml-base.en.bin`, Python 3.13 and Node). The installer lands in `app/out/`.
+
 ## Features
 
 - **Dynamic channel selection.** Nothing is hardcoded. Pass `--channel` or set it in `config.toml`.
