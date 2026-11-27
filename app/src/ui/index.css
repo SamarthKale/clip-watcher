@@ -5,27 +5,127 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 /* ------------------------------------------------------------------------------------------
-   Spikecut brand tokens.
-   One accent (spike violet) used for actions and focus, coral only for "live", everything else
-   quiet greys. Tailwind's indigo scale is retinted to the brand violet, so every page picks it up.
+   Spikecut colour themes: pastel and matte.
+   Every theme is a dusty, low-saturation accent scale; surfaces are flat (no gloss, no glow).
+   Tailwind's indigo scale *is* the accent, so retinting it restyles every page at once.
+   Lavender is the default; Sage, Clay and Mist are picked in Settings -> Appearance
+   (html[data-theme]). "Live" is a soft rose in every theme.
    ------------------------------------------------------------------------------------------ */
 @theme {
   --font-sans: 'Segoe UI Variable Text', 'Segoe UI Variable', 'Segoe UI', system-ui, -apple-system, sans-serif;
   --font-display: 'Segoe UI Variable Display', 'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif;
-  --color-indigo-50: #f4f1ff;
-  --color-indigo-100: #ebe5ff;
-  --color-indigo-200: #d8ccff;
-  --color-indigo-300: #bca8ff;
-  --color-indigo-400: #9b7bff;
-  --color-indigo-500: #7f57ff;
-  --color-indigo-600: #6a3df5;
-  --color-indigo-700: #592ddd;
-  --color-indigo-800: #4826b4;
-  --color-indigo-900: #3b2290;
-  --color-indigo-950: #231159;
-  --color-coral-400: #ff7a7e;
-  --color-coral-500: #ff5a5f;
-  --color-coral-600: #ec3f45;
+  /* Lavender */
+  --color-indigo-50: #f6f4fb;
+  --color-indigo-100: #eeeaf7;
+  --color-indigo-200: #ddd6ef;
+  --color-indigo-300: #c6bce3;
+  --color-indigo-400: #a99cd2;
+  --color-indigo-500: #8f82c0;
+  --color-indigo-600: #7a6dad;
+  --color-indigo-700: #655a94;
+  --color-indigo-800: #4f4775;
+  --color-indigo-900: #3d375a;
+  --color-indigo-950: #26223a;
+  /* status colours, softened to match: sage green, honey, dusty red, mist blue */
+  --color-emerald-50: #f1f6f2;
+  --color-emerald-100: #e1ede4;
+  --color-emerald-200: #c6dccc;
+  --color-emerald-300: #a3c5ad;
+  --color-emerald-400: #80ab8d;
+  --color-emerald-500: #659274;
+  --color-emerald-600: #52795f;
+  --color-emerald-700: #43624e;
+  --color-emerald-800: #364f3f;
+  --color-emerald-900: #2b3f33;
+  --color-emerald-950: #1a261f;
+  --color-amber-50: #fbf7ee;
+  --color-amber-100: #f5ecd6;
+  --color-amber-200: #ead8ae;
+  --color-amber-300: #dcbf81;
+  --color-amber-400: #cba55d;
+  --color-amber-500: #b58c45;
+  --color-amber-600: #977238;
+  --color-amber-700: #795b2e;
+  --color-amber-800: #604926;
+  --color-amber-900: #4b3a1f;
+  --color-amber-950: #2d2213;
+  --color-red-50: #fbf3f3;
+  --color-red-100: #f5e3e3;
+  --color-red-200: #eac6c6;
+  --color-red-300: #dba3a3;
+  --color-red-400: #c98080;
+  --color-red-500: #b46565;
+  --color-red-600: #9a5252;
+  --color-red-700: #7f4343;
+  --color-red-800: #663737;
+  --color-red-900: #502d2d;
+  --color-red-950: #301a1a;
+  --color-sky-50: #f3f6fa;
+  --color-sky-100: #e6edf5;
+  --color-sky-200: #cfdcea;
+  --color-sky-300: #b0c4dc;
+  --color-sky-400: #8ea8c8;
+  --color-sky-500: #728db1;
+  --color-sky-600: #5f789b;
+  --color-sky-700: #4e6380;
+  --color-sky-800: #3f4f66;
+  --color-sky-900: #313e50;
+  --color-sky-950: #1e2632;
+  /* violet (used for 'working' states) follows the theme accent */
+  --color-violet-50: var(--color-indigo-50);
+  --color-violet-100: var(--color-indigo-100);
+  --color-violet-200: var(--color-indigo-200);
+  --color-violet-300: var(--color-indigo-300);
+  --color-violet-400: var(--color-indigo-400);
+  --color-violet-500: var(--color-indigo-500);
+  --color-violet-600: var(--color-indigo-600);
+  --color-violet-700: var(--color-indigo-700);
+  --color-violet-800: var(--color-indigo-800);
+  --color-violet-900: var(--color-indigo-900);
+  --color-violet-950: var(--color-indigo-950);
+  /* live: soft rose */
+  --color-coral-400: #e8acac;
+  --color-coral-500: #d98c8c;
+  --color-coral-600: #bd6f6f;
+}
+html[data-theme='sage'] {
+  --color-indigo-50: #f3f7f4;
+  --color-indigo-100: #e6efe8;
+  --color-indigo-200: #cfe0d3;
+  --color-indigo-300: #b0cbb7;
+  --color-indigo-400: #8fb199;
+  --color-indigo-500: #73977e;
+  --color-indigo-600: #5f8269;
+  --color-indigo-700: #4d6b56;
+  --color-indigo-800: #3d5545;
+  --color-indigo-900: #2f4236;
+  --color-indigo-950: #1c2921;
+}
+html[data-theme='clay'] {
+  --color-indigo-50: #fbf5f2;
+  --color-indigo-100: #f6e9e2;
+  --color-indigo-200: #ecd2c5;
+  --color-indigo-300: #dfb5a1;
+  --color-indigo-400: #cd957c;
+  --color-indigo-500: #b97b61;
+  --color-indigo-600: #a2664e;
+  --color-indigo-700: #865440;
+  --color-indigo-800: #6a4334;
+  --color-indigo-900: #533529;
+  --color-indigo-950: #33201a;
+}
+html[data-theme='mist'] {
+  --color-indigo-50: #f3f6fa;
+  --color-indigo-100: #e6edf5;
+  --color-indigo-200: #cfdcea;
+  --color-indigo-300: #b0c4dc;
+  --color-indigo-400: #8ea8c8;
+  --color-indigo-500: #728db1;
+  --color-indigo-600: #5f789b;
+  --color-indigo-700: #4e6380;
+  --color-indigo-800: #3f4f66;
+  --color-indigo-900: #313e50;
+  --color-indigo-950: #1e2632;
 }
 
 :root {
@@ -51,19 +151,24 @@ table {
   font-variant-numeric: tabular-nums;
 }
 ::selection {
-  background: rgb(127 87 255 / 0.22);
+  background: var(--color-indigo-200);
+}
+/* native checkboxes, radios and sliders use the theme accent instead of the system blue */
+input,
+progress {
+  accent-color: var(--color-indigo-600);
 }
 
-/* Primary buttons: a soft violet gradient with a light top edge. */
+/* Primary buttons: one flat, matte fill. No gradient, no glow. */
 .btn-primary {
-  background-image: linear-gradient(180deg, #7f57ff, #6a3df5);
-  box-shadow: 0 1px 2px rgb(54 24 160 / 0.25), 0 4px 14px rgb(106 61 245 / 0.22), inset 0 1px 0 rgb(255 255 255 / 0.22);
+  background-color: var(--color-indigo-600);
+  box-shadow: 0 1px 1px rgb(30 27 40 / 0.08);
 }
 .btn-primary:hover:not(:disabled) {
-  background-image: linear-gradient(180deg, #8b66ff, #7046ff);
+  background-color: var(--color-indigo-700);
 }
 
-/* The "live" dot: a coral core with a ring that ripples outwards. */
+/* The "live" dot: a soft rose core with a ring that ripples outwards. */
 .live-dot {
   position: relative;
   display: inline-block;
@@ -93,20 +198,20 @@ table {
 
 /* The tour card stays solid over the see-through window so its text is always crisp. */
 .tour-card {
-  background: #fff;
+  background: #fffefb;
 }
 .dark .tour-card {
   background: #18181b;
 }
 
-/* The tour points at a sidebar item with a soft violet glow. */
+/* The tour points at a sidebar item with a soft outline that breathes. */
 .tour-target {
-  box-shadow: 0 0 0 2px rgb(127 87 255 / 0.85), 0 0 0 7px rgb(127 87 255 / 0.18);
+  box-shadow: 0 0 0 2px var(--color-indigo-400), 0 0 0 6px var(--color-indigo-100);
   animation: tour-glow 1.8s ease-in-out infinite;
 }
 @keyframes tour-glow {
   50% {
-    box-shadow: 0 0 0 2px rgb(127 87 255 / 0.85), 0 0 0 11px rgb(127 87 255 / 0.06);
+    box-shadow: 0 0 0 2px var(--color-indigo-400), 0 0 0 9px var(--color-indigo-50);
   }
 }
 
@@ -120,67 +225,64 @@ table {
 }
 
 /* ------------------------------------------------------------------------------------------
-   Glass mode (the desktop window). Electron opens a see-through window with Windows acrylic in its
-   light tint, so the real desktop shows through, blurred and brightened. Panels are frosted white
-   over it. A plain browser keeps the solid theme.
+   Window mode (the desktop app). Electron opens a see-through window with Windows acrylic in its
+   light tint; a warm paper-coloured wash sits over it so the window reads as matte, with only a hint
+   of the desktop behind. Panels are flat, nearly opaque paper: no sheen, no glossy highlight.
+   A plain browser keeps the solid theme.
    ------------------------------------------------------------------------------------------ */
 html.glass {
   color-scheme: light;
-  --color-zinc-50: rgb(255 255 255 / 0.46);
-  --color-zinc-100: rgb(28 22 56 / 0.05);
-  --color-zinc-200: rgb(28 22 56 / 0.085);
-  --color-zinc-300: rgb(28 22 56 / 0.14);
+  --color-zinc-50: rgb(250 249 246 / 0.6);
+  --color-zinc-100: rgb(40 36 30 / 0.05);
+  --color-zinc-200: rgb(40 36 30 / 0.08);
+  --color-zinc-300: rgb(40 36 30 / 0.13);
 }
 html.glass,
 html.glass body {
   background: transparent !important;
-  color: #18181b;
+  color: #26241f;
 }
-/* a light wash with two faint brand glows: keeps text readable whatever is on the desktop */
 html.glass body::before {
   content: '';
   position: fixed;
   inset: 0;
   z-index: -1;
   pointer-events: none;
-  background:
-    radial-gradient(56rem 34rem at 8% -12%, rgb(143 114 255 / 0.16), transparent 62%),
-    radial-gradient(44rem 30rem at 104% 112%, rgb(255 90 95 / 0.08), transparent 60%),
-    rgb(250 250 253 / 0.55);
+  /* warm paper, faintly tinted with the theme */
+  background: color-mix(in srgb, var(--color-indigo-50) 45%, rgb(247 245 240));
+  opacity: 0.88;
 }
 html.glass .bg-white {
-  background-color: rgb(255 255 255 / 0.7);
+  background-color: rgb(255 254 251 / 0.94);
 }
 html.glass nav[aria-label='Main'] {
-  background: rgb(255 255 255 / 0.38);
-  border-color: rgb(28 22 56 / 0.07);
+  background: rgb(250 248 244 / 0.72);
+  border-color: rgb(40 36 30 / 0.06);
 }
 html.glass nav[aria-label='Main'],
 html.glass header {
-  backdrop-filter: blur(28px) saturate(180%);
-  -webkit-backdrop-filter: blur(28px) saturate(180%);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
 }
 html.glass [class*='rounded-xl'][class*='border'],
 html.glass [class*='rounded-2xl'][class*='border'] {
-  backdrop-filter: blur(24px) saturate(170%);
-  -webkit-backdrop-filter: blur(24px) saturate(170%);
-  box-shadow: 0 1px 2px rgb(28 22 56 / 0.04), 0 10px 30px rgb(28 22 56 / 0.07), inset 0 1px 0 rgb(255 255 255 / 0.9);
+  box-shadow: 0 1px 2px rgb(40 36 30 / 0.04);
 }
 html.glass [class*='border-zinc-200'],
 html.glass [class*='border-zinc-300'] {
-  border-color: rgb(28 22 56 / 0.09);
+  border-color: rgb(40 36 30 / 0.08);
 }
 html.glass input,
 html.glass textarea,
 html.glass select {
-  background-color: rgb(255 255 255 / 0.78);
+  background-color: rgb(255 254 251);
 }
 html.glass ::-webkit-scrollbar {
   width: 10px;
   height: 10px;
 }
 html.glass ::-webkit-scrollbar-thumb {
-  background: rgb(28 22 56 / 0.16);
+  background: rgb(40 36 30 / 0.16);
   border-radius: 8px;
   border: 2px solid transparent;
   background-clip: content-box;
@@ -203,7 +305,7 @@ html.glass #titlebar {
   font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.01em;
-  color: rgb(39 39 42 / 0.78);
+  color: rgb(38 36 31 / 0.72);
   -webkit-app-region: drag;
   user-select: none;
 }

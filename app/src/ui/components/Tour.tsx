@@ -338,14 +338,14 @@ export function Tour({ open, onClose, onStep }: { open: boolean; onClose: (finis
             role="dialog"
             aria-modal={centered}
             aria-label={`${BRAND.name} tour`}
-            className="tour-card pointer-events-auto relative w-full max-w-[30rem] overflow-hidden rounded-2xl border border-zinc-200 shadow-2xl shadow-indigo-900/15 dark:border-zinc-800"
+            className="tour-card pointer-events-auto relative w-full max-w-[30rem] overflow-hidden rounded-2xl border border-zinc-200 shadow-xl shadow-black/[0.06] dark:border-zinc-800"
             initial={{ opacity: 0, y: 24, scale: 0.97 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 16, scale: 0.98 }}
             transition={{ type: 'spring', stiffness: 320, damping: 30 }}
           >
             <div className="h-1 bg-zinc-100 dark:bg-zinc-800">
-              <motion.div className="h-full bg-gradient-to-r from-indigo-500 to-coral-500" animate={{ width: `${((i + 1) / TOUR_STEPS.length) * 100}%` }} transition={{ type: 'spring', stiffness: 200, damping: 30 }} />
+              <motion.div className="h-full bg-indigo-400" animate={{ width: `${((i + 1) / TOUR_STEPS.length) * 100}%` }} transition={{ type: 'spring', stiffness: 200, damping: 30 }} />
             </div>
             <div className="p-6">
               <div className="mb-4 flex items-center justify-between">

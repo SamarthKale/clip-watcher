@@ -92,6 +92,7 @@ export interface Settings {
   autoVisibility: 'private' | 'unlisted' | 'public';
   libraryDir: string;
   tourSeen?: boolean;
+  theme?: ThemeId;
 }
 
 export interface HistoryRow {
@@ -108,3 +109,5 @@ export interface HistoryRow {
   published: number;
   last_error: string;
 }
+
+export type ThemeId = 'lavender' | 'sage' | 'clay' | 'mist';

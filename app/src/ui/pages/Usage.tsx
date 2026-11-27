@@ -38,7 +38,7 @@ export function Usage() {
                   {d.per_day.map((x) => (
                     <div key={x.date} className="flex flex-1 flex-col items-center gap-1" title={`${x.date}: ${fmtUsd(x.cost_usd)}, ${x.attempts} attempts`}>
                       <div className="text-[10px] text-zinc-500">{fmtUsd(x.cost_usd)}</div>
-                      <motion.div className="w-full rounded-t bg-gradient-to-t from-indigo-500 to-indigo-400" initial={{ height: 0 }} animate={{ height: Math.max(3, (x.cost_usd / maxDay) * 100) }} transition={{ type: 'spring', stiffness: 160, damping: 22 }} />
+                      <motion.div className="w-full rounded-t bg-indigo-300" initial={{ height: 0 }} animate={{ height: Math.max(3, (x.cost_usd / maxDay) * 100) }} transition={{ type: 'spring', stiffness: 160, damping: 22 }} />
                       <div className="text-[10px] text-zinc-500">{x.date.slice(5)}</div>
                     </div>
                   ))}

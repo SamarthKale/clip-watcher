@@ -16,7 +16,7 @@ import { Storage } from './pages/Storage';
 import { LogPage } from './pages/LogPage';
 import { SettingsPage } from './pages/Settings';
 import { api } from './api';
-import { BRAND, Wordmark } from './brand';
+import { BRAND, Wordmark, applyTheme } from './brand';
 import { Icon, LiveDot, usePoll } from './components/ui';
 import { OPEN_TOUR_EVENT, Tour, type TourStep } from './components/Tour';
 
@@ -80,7 +80,7 @@ function NavItem({ p, active, highlighted }: { p: (typeof PAGES)[number]; active
         {active && (
           <motion.span
             layoutId="nav-active"
-            className="absolute inset-0 rounded-lg bg-white shadow-[0_1px_2px_rgb(28_22_56/0.06),0_4px_12px_rgb(106_61_245/0.10)] ring-1 ring-indigo-500/15 dark:bg-indigo-600 dark:ring-0"
+            className="absolute inset-0 rounded-lg bg-white shadow-[0_1px_2px_rgb(40_36_30/0.06)] ring-1 ring-black/[0.05] dark:bg-indigo-600 dark:ring-0"
             transition={{ type: 'spring', stiffness: 520, damping: 40 }}
           />
         )}
@@ -120,7 +120,11 @@ export function App() {
   // First run: the tour opens by itself until it has been finished or skipped once.
   useEffect(() => {
     let live = true;
-    api.get<{ tourSeen?: boolean }>('/api/settings').then((s) => { if (live && s.tourSeen === false) setTour(true); }, () => undefined);
+    api.get<{ tourSeen?: boolean; theme?: string }>('/api/settings').then((s) => {
+      if (!live) return;
+      applyTheme(s.theme);
+      if (s.tourSeen === false) setTour(true);
+    }, () => undefined);
     const open = () => setTour(true);
     window.addEventListener(OPEN_TOUR_EVENT, open);
     return () => { live = false; window.removeEventListener(OPEN_TOUR_EVENT, open); };

@@ -108,6 +108,12 @@ test('add a folder, scan it, edit metadata by hand, and never expose the API key
 
   // Settings: the Gemini key is write-only and never shown back.
   await nav(page, 'Settings');
+  // Appearance: a pastel theme applies at once and is remembered after a reload.
+  await page.getByRole('radio', { name: /Sage/ }).click();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'sage');
+  await page.reload();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'sage');
+  await expect(page.getByRole('radio', { name: /Sage/ })).toHaveAttribute('aria-checked', 'true');
   await page.getByText('Advanced: Gemini').click();
   await page.getByLabel('Gemini API key').fill('SECRET-KEY-VALUE-123');
   await page.getByRole('button', { name: 'Save key' }).click();

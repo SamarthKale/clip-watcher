@@ -12,7 +12,7 @@ export const SPIKE_PATH = 'M12 38 H21 L25 33 L29 38 H33 L40 15 L47 38 H52';
 export const CUT_LINE = { x1: 31, y1: 31.5, x2: 50, y2: 19.5 };
 
 /**
- * The Spikecut mark. `draw` animates the line drawing itself (splash, tour), otherwise it is static.
+ * The Spikecut mark (flat and matte, tinted by the current theme). `draw` animates the line drawing itself (splash, tour), otherwise it is static.
  * Motion respects the Windows "reduce animations" setting through MotionConfig in App.
  */
 export function LogoMark({ size = 32, draw = false, className = '' }: { size?: number; draw?: boolean; className?: string }) {
@@ -20,17 +20,13 @@ export function LogoMark({ size = 32, draw = false, className = '' }: { size?: n
   return (
     <svg width={size} height={size} viewBox="0 0 64 64" className={`shrink-0 ${className}`} aria-hidden="true">
       <defs>
-        <linearGradient id={`g${id}`} x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stopColor="#8f72ff" />
-          <stop offset="1" stopColor="#5326e0" />
-        </linearGradient>
         <mask id={`m${id}`}>
           <rect width="64" height="64" fill="#fff" />
           <line {...CUT_LINE} stroke="#000" strokeWidth="3.4" strokeLinecap="round" />
         </mask>
       </defs>
-      <rect width="64" height="64" rx="16" fill={`url(#g${id})`} />
-      <rect x="1" y="1" width="62" height="62" rx="15" fill="none" stroke="#fff" strokeOpacity="0.22" strokeWidth="1.5" />
+      {/* flat, matte tile in the current theme's accent */}
+      <rect width="64" height="64" rx="16" style={{ fill: 'var(--color-indigo-500)' }} />
       <g mask={`url(#m${id})`}>
         <motion.path
           d={SPIKE_PATH}
@@ -48,7 +44,7 @@ export function LogoMark({ size = 32, draw = false, className = '' }: { size?: n
         cx="50.5"
         cy="14"
         r="3.4"
-        fill="#ff5a5f"
+        style={{ fill: 'var(--color-coral-400)' }}
         initial={draw ? { scale: 0, opacity: 0 } : false}
         animate={{ scale: 1, opacity: 1 }}
         transition={{ delay: draw ? 0.85 : 0, type: 'spring', stiffness: 420, damping: 16 }}
@@ -67,4 +63,20 @@ export function Wordmark({ size = 30, className = '' }: { size?: number; classNa
       </span>
     </span>
   );
+}
+
+/* ---------- colour themes (all pastel and matte; the scales live in index.css) ---------- */
+export const THEMES: { id: 'lavender' | 'sage' | 'clay' | 'mist'; name: string; note: string; swatch: [string, string, string] }[] = [
+  { id: 'lavender', name: 'Lavender', note: 'Soft violet-grey. The default.', swatch: ['#eeeaf7', '#a99cd2', '#7a6dad'] },
+  { id: 'sage', name: 'Sage', note: 'Muted green, calm and natural.', swatch: ['#e6efe8', '#8fb199', '#5f8269'] },
+  { id: 'clay', name: 'Clay', note: 'Warm terracotta and sand.', swatch: ['#f6e9e2', '#cd957c', '#a2664e'] },
+  { id: 'mist', name: 'Mist', note: 'Cool dusty blue.', swatch: ['#e6edf5', '#8ea8c8', '#5f789b'] },
+];
+export type ThemeName = (typeof THEMES)[number]['id'];
+
+/** Applies a theme to the whole page at once (the CSS swaps the accent scale). */
+export function applyTheme(id: string | undefined): void {
+  const t = THEMES.some((x) => x.id === id) ? id! : 'lavender';
+  if (t === 'lavender') delete document.documentElement.dataset.theme;
+  else document.documentElement.dataset.theme = t;
 }

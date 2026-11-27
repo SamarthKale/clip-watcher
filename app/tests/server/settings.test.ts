@@ -16,3 +16,13 @@ describe('first-run tour flag', () => {
     expect(getSettings(db).tourSeen).toBe(false);
   });
 });
+
+describe('colour theme', () => {
+  it('defaults to lavender, saves a pastel theme, and refuses unknown ones', () => {
+    const db = openDb(':memory:');
+    expect(getSettings(db).theme).toBe('lavender');
+    expect(setSettings(db, { theme: 'sage' }).theme).toBe('sage');
+    expect(() => setSettings(db, { theme: 'neon' })).toThrow();
+    expect(getSettings(db).theme).toBe('sage');
+  });
+});

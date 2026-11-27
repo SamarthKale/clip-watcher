@@ -50,7 +50,7 @@ function ChatChart({ chat }: { chat: ChatState }) {
           transition={{ type: 'spring', stiffness: 170, damping: 24, delay: Math.min(i * 0.008, 0.4) }}
         />
       ))}
-      {chat.threshold > 0 && <line x1={0} x2={W} y1={y(chat.threshold)} y2={y(chat.threshold)} stroke="#ff5a5f" strokeOpacity={0.7} strokeWidth={1.5} strokeDasharray="5 4" vectorEffect="non-scaling-stroke" />}
+      {chat.threshold > 0 && <line x1={0} x2={W} y1={y(chat.threshold)} y2={y(chat.threshold)} style={{ stroke: 'var(--color-coral-500)' }} strokeWidth={1.5} strokeDasharray="5 4" vectorEffect="non-scaling-stroke" />}
     </svg>
   );
 }

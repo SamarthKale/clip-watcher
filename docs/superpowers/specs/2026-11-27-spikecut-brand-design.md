@@ -30,4 +30,10 @@ it feel alive, and teach new users the whole product on first launch.
   opens its page and glows its sidebar item. Remembered as `tourSeen` in the upload server's settings
   (not browser storage: the app's port, and so its browser origin, changes on every launch).
 
+**Revision (owner feedback: "remove the neon colours, use pastel and matte themes").**
+The bright violet, coral, gradients, glows and glossy glass were replaced by dusty pastel accent scales
+on flat, nearly opaque paper-coloured panels. Four themes (Lavender default, Sage, Clay, Mist) are
+chosen in Settings -> Appearance and saved as `theme` in the upload server's settings. Status colours
+(green, amber, red, blue) are softened to match, and the logo tile is flat and follows the theme.
+
 **Non-goals.** No page changes behaviour; no new pipeline features; no installer in this change.

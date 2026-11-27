@@ -80,7 +80,7 @@ export function Dashboard() {
             <div className="w-full sm:w-72">
               <div className="mb-1 flex justify-between text-xs text-zinc-500"><span>On YouTube</span><span>{done} of {data.counts.detected} ({pct}%)</span></div>
               <div role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} className="h-2 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800">
-                <div className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-emerald-500 transition-all" style={{ width: `${pct}%` }} />
+                <div className="h-full rounded-full bg-indigo-400 transition-all" style={{ width: `${pct}%` }} />
               </div>
             </div>
           )}

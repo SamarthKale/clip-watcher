@@ -70,17 +70,17 @@ function splash(text, detail = '', failed = false) {
     .replace('<circle ', '<circle class="dot" ');
   const html = `<!doctype html><meta charset="utf-8"><style>
     body{margin:0;height:100vh;display:grid;place-items:center;font-family:'Segoe UI Variable Display','Segoe UI',system-ui,sans-serif;
-      color:#18181b;background:radial-gradient(40rem 26rem at 30% 10%,rgba(143,114,255,.18),transparent 65%),rgba(250,250,253,.62);-webkit-app-region:drag}
+      color:#26241f;background:rgba(247,245,240,.9);-webkit-app-region:drag}
     .wrap{text-align:center;animation:up .5s cubic-bezier(.16,1,.3,1) both}
-    .mark{filter:drop-shadow(0 12px 28px rgba(106,61,245,.35))}
+    .mark{filter:drop-shadow(0 6px 14px rgba(40,36,30,.12))}
     .line{stroke-dasharray:1;stroke-dashoffset:1;animation:draw .9s .15s cubic-bezier(.65,0,.35,1) forwards}
     .dot{transform-origin:50.5px 14px;transform:scale(0);animation:pop .45s 1s cubic-bezier(.34,1.56,.64,1) forwards}
-    .name{margin-top:18px;font-size:26px;font-weight:600;letter-spacing:-.02em}.name b{color:#6a3df5;font-weight:600}
-    .tag{margin-top:4px;font-size:13px;color:#71717a}
-    .text{margin-top:26px;font-size:14px;color:${failed ? '#b91c1c' : '#3f3f46'}}
-    .detail{margin:8px auto 0;font-size:12px;color:#71717a;max-width:560px;white-space:pre-wrap;-webkit-app-region:no-drag;user-select:text}
-    .bar{margin:18px auto 0;width:160px;height:3px;border-radius:3px;background:rgba(28,22,56,.08);overflow:hidden}
-    .bar i{display:block;height:100%;width:40%;border-radius:3px;background:linear-gradient(90deg,#7f57ff,#ff5a5f);animation:slide 1.2s ease-in-out infinite}
+    .name{margin-top:18px;font-size:26px;font-weight:600;letter-spacing:-.02em}.name b{color:#7a6dad;font-weight:600}
+    .tag{margin-top:4px;font-size:13px;color:#7c776d}
+    .text{margin-top:26px;font-size:14px;color:${failed ? '#9a5252' : '#4a463e'}}
+    .detail{margin:8px auto 0;font-size:12px;color:#7c776d;max-width:560px;white-space:pre-wrap;-webkit-app-region:no-drag;user-select:text}
+    .bar{margin:18px auto 0;width:160px;height:3px;border-radius:3px;background:rgba(40,36,30,.08);overflow:hidden}
+    .bar i{display:block;height:100%;width:40%;border-radius:3px;background:#a99cd2;animation:slide 1.2s ease-in-out infinite}
     @keyframes draw{to{stroke-dashoffset:0}}@keyframes pop{to{transform:scale(1)}}
     @keyframes up{from{opacity:0;transform:translateY(10px)}}@keyframes slide{from{transform:translateX(-100%)}to{transform:translateX(250%)}}
     @media (prefers-reduced-motion:reduce){*{animation:none!important}.line{stroke-dashoffset:0}.dot{transform:none}}

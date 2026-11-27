@@ -3,6 +3,7 @@ import { api, errorText } from '../api';
 import { Button, Card, ErrorBanner, Field, Icon, Notice, PageHeader, Spinner, Toggle, inputCls, selectCls, usePoll } from '../components/ui';
 import type { Settings } from '../types';
 import { openTour } from '../components/Tour';
+import { THEMES, applyTheme } from '../brand';
 
 export function SettingsPage() {
   const s = usePoll(() => api.get<Settings>('/api/settings'), 60000);
@@ -21,7 +22,7 @@ export function SettingsPage() {
   };
   const num = (k: keyof Settings) => (e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, [k]: Number(e.target.value) });
   const saveSettings = () => run(async () => {
-    const { geminiKeySet: _k, googleClientId: _g, queuePaused: _q, tourSeen: _t, ...rest } = form;
+    const { geminiKeySet: _k, googleClientId: _g, queuePaused: _q, tourSeen: _t, theme: _th, ...rest } = form;
     const next = await api.put<Settings>('/api/settings', rest);
     setForm(next);
   }, 'Settings saved');
@@ -33,6 +34,37 @@ export function SettingsPage() {
       </PageHeader>
       <ErrorBanner error={error ?? s.error} />
       {note && <div className="mb-3 text-sm text-emerald-600" role="status">{note}</div>}
+
+      <Card className="mb-4 space-y-3">
+        <h2 className="font-semibold">Appearance</h2>
+        <p className="text-sm text-zinc-500">Pick a colour theme. Every theme is soft and matte; the change applies at once and is remembered.</p>
+        <div role="radiogroup" aria-label="Colour theme" className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {THEMES.map((t) => {
+            const on = (form.theme ?? 'lavender') === t.id;
+            return (
+              <button
+                key={t.id}
+                role="radio"
+                aria-checked={on}
+                onClick={() => {
+                  applyTheme(t.id);
+                  setForm({ ...form, theme: t.id });
+                  void api.put('/api/settings', { theme: t.id }).catch((e) => setError(errorText(e)));
+                }}
+                className={`flex items-center gap-3 rounded-xl border p-3 text-left transition-colors ${on ? 'border-indigo-400 bg-indigo-50' : 'border-zinc-200 hover:bg-zinc-100'}`}
+              >
+                <span className="flex shrink-0 -space-x-1.5">
+                  {t.swatch.map((c) => <span key={c} className="h-6 w-6 rounded-full border-2 border-white" style={{ background: c }} />)}
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-sm font-semibold">{t.name}</span>
+                  <span className="block text-xs text-zinc-500">{t.note}</span>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </Card>
 
       <Card className="mb-4 space-y-3">
         <h2 className="font-semibold">Publishing</h2>
