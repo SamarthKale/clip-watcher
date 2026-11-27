@@ -160,6 +160,14 @@ DEFAULTS: dict[str, Any] = {
         "max_spend_usd": 6.0,
         "library": True,
     },
+    "vod": {
+        "ytdlp": "yt-dlp",
+        "max_height": 1080,            # download at most this resolution
+        "download_timeout": 7200,      # seconds
+        "min_chat_messages": 200,      # a chat replay with fewer messages is ignored (audio is used)
+        "audio_always": False,         # also run the loudness detector when a chat replay was used
+        "watch_interval_minutes": 60,  # how often the watch list is checked while the pipeline runs
+    },
     "library": {
         # Where finished Shorts are published for the uploader (relative = under the project folder).
         "dir": "Shorts",

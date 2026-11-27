@@ -16,7 +16,7 @@ from .config import load_config
 from .db import DB
 from .util import STOP, install_stop_handlers, setup_logging, utc_iso, which
 
-STAGE_PROCESSES = ("record", "chat", "detect", "audiodetect", "extract", "transcribe", "edit", "storage")
+STAGE_PROCESSES = ("record", "chat", "detect", "audiodetect", "extract", "transcribe", "edit", "storage", "vodwork")
 
 
 def _common(p: argparse.ArgumentParser) -> None:
@@ -41,6 +41,7 @@ def build_parser() -> argparse.ArgumentParser:
         ("transcribe", "STEP 5: transcribe raw clips with whisper.cpp"),
         ("edit", "STEP 6: build editing jobs and run Claude Code on them"),
         ("storage", "back up raw clips to the external drive and clean up safely"),
+        ("vodwork", "work queued VOD links and check the watch list"),
         ("status", "show sessions, queues and recent jobs"),
         ("check", "check that external tools and config are in place"),
         ("next-edit", "list editing jobs waiting for a manual Claude Code session"),
@@ -58,6 +59,12 @@ def build_parser() -> argparse.ArgumentParser:
     _common(p)
     p.add_argument("event_id")
     p.add_argument("stage", choices=("extract", "transcribe", "edit"))
+    p = sub.add_parser("vod", help="clip a finished stream from its link, and manage the streamer watch list")
+    _common(p)
+    p.add_argument("action", choices=("add", "run", "list", "watch", "unwatch", "check"))
+    p.add_argument("items", nargs="*", help="add: links; watch/unwatch: platform:channel (twitch:name, youtube:@name)")
+    p.add_argument("--keyword", help="watch: only streams whose title contains this")
+    p.add_argument("--hours", type=int, default=36, help="watch: only streams newer than this many hours")
     p = sub.add_parser("usage", help="Claude usage per video, per day and in total")
     _common(p)
     p.add_argument("--backfill", action="store_true", help="import edit runs saved before usage tracking")
@@ -273,6 +280,45 @@ def cmd_skip(cfg, db, args):
     return 0 if ok else 1
 
 
+def cmd_vod_stage(cfg, db, args):
+    from .vod import vod_forever
+    vod_forever(cfg, db)
+
+
+def cmd_vod(cfg, db, args):
+    from . import vod
+    try:
+        if args.action == "add":
+            for url in args.items:
+                jid, new = vod.add_job(db, url)
+                print(f"{'queued' if new else 'already queued'}: job {jid}  {url}")
+            print("It is worked by the `vodwork` stage (started by `run`), or run `python -m clipwatcher vod run` now.")
+        elif args.action == "run":
+            while vod.work_one(cfg, db):
+                pass
+        elif args.action == "list":
+            for r in db.conn.execute("SELECT * FROM vod_jobs ORDER BY id DESC LIMIT 30"):
+                print(f"  {r['id']:>3} {r['status']:<9} {r['platform']:<8} {r['url']}  {r['note'] or ''}"
+                      f"{('  ERROR: ' + r['error']) if r['error'] else ''}")
+        elif args.action == "watch":
+            if not args.items:
+                for w in db.conn.execute("SELECT * FROM watchlist ORDER BY id"):
+                    print(f"  {w['platform']}:{w['channel']}  filter={w['keyword'] or '(none)'}  "
+                          f"last {w['lookback_hours']} h  {'on' if w['enabled'] else 'off'}")
+            else:
+                plat, _, chan = args.items[0].partition(":")
+                vod.add_watch(db, plat, chan, args.keyword or "", args.hours)
+                print(f"watching {plat}:{chan}")
+        elif args.action == "unwatch":
+            plat, _, chan = args.items[0].partition(":")
+            print("removed" if vod.remove_watch(db, plat, chan) else "not on the list")
+        elif args.action == "check":
+            print(vod.watch_pass(cfg, db))
+    except vod.VodError as e:
+        print(f"clipwatcher: {e}")
+        return 1
+
+
 def cmd_usage(cfg, db, args):
     from . import usage
     if args.backfill:
@@ -387,5 +433,5 @@ COMMANDS = {
     "status": cmd_status, "check": cmd_check, "detect-file": cmd_detect_file,
     "retry": cmd_retry, "finish": cmd_finish, "next-edit": cmd_next_edit,
     "make-assets": cmd_make_assets, "storage": cmd_storage, "audiodetect": cmd_audiodetect,
-    "ui": lambda cfg, db, args: cmd_ui(cfg, db, args), "skip": cmd_skip, "usage": cmd_usage,
+    "ui": lambda cfg, db, args: cmd_ui(cfg, db, args), "skip": cmd_skip, "usage": cmd_usage, "vod": cmd_vod, "vodwork": cmd_vod_stage,
 }

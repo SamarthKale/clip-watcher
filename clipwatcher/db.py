@@ -76,6 +76,31 @@ CREATE TABLE IF NOT EXISTS edit_usage (
     UNIQUE(event_id, attempt, created)
 );
 CREATE INDEX IF NOT EXISTS edit_usage_event ON edit_usage(event_id);
+CREATE TABLE IF NOT EXISTS vod_jobs (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    url        TEXT NOT NULL UNIQUE,
+    platform   TEXT NOT NULL,
+    status     TEXT NOT NULL,       -- pending | running | done | failed | filtered
+    attempts   INTEGER NOT NULL DEFAULT 0,
+    source     TEXT NOT NULL DEFAULT 'manual',   -- manual | watch:<platform>:<channel>
+    session_id TEXT,
+    events     INTEGER NOT NULL DEFAULT 0,
+    note       TEXT,
+    error      TEXT,
+    created    REAL NOT NULL,
+    updated    REAL NOT NULL
+);
+CREATE TABLE IF NOT EXISTS watchlist (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    platform       TEXT NOT NULL,
+    channel        TEXT NOT NULL,
+    keyword        TEXT NOT NULL DEFAULT '',     -- only streams whose title contains this ('' = all)
+    lookback_hours INTEGER NOT NULL DEFAULT 36,
+    enabled        INTEGER NOT NULL DEFAULT 1,
+    last_checked   REAL,
+    created        REAL NOT NULL,
+    UNIQUE(platform, channel)
+);
 CREATE TABLE IF NOT EXISTS kv (
     key   TEXT PRIMARY KEY,
     value TEXT
@@ -100,6 +125,10 @@ class DB:
             self.conn.execute("ALTER TABLE sessions ADD COLUMN kind TEXT NOT NULL DEFAULT 'live'")
         if "source_url" not in cols:  # migration: the VOD link a session was made from
             self.conn.execute("ALTER TABLE sessions ADD COLUMN source_url TEXT")
+        if "platform" not in cols:  # migration: twitch | youtube | kick
+            self.conn.execute("ALTER TABLE sessions ADD COLUMN platform TEXT NOT NULL DEFAULT 'twitch'")
+        if "channel_url" not in cols:  # migration: the streamer's channel link for attribution
+            self.conn.execute("ALTER TABLE sessions ADD COLUMN channel_url TEXT")
 
     def close(self) -> None:
         self.conn.close()
@@ -127,10 +156,11 @@ class DB:
 
     # ---------------------------------------------------------- sessions
     def add_session(self, sid: str, channel: str, path: str, quality: str,
-                    kind: str = "live", source_url: str | None = None) -> None:
-        self.conn.execute("INSERT INTO sessions(id, channel, path, status, quality, created, kind, source_url) "
-                          "VALUES(?, ?, ?, 'recording', ?, ?, ?, ?)",
-                          (sid, channel, path, quality, time.time(), kind, source_url))
+                    kind: str = "live", source_url: str | None = None, platform: str = "twitch",
+                    channel_url: str | None = None) -> None:
+        self.conn.execute("INSERT INTO sessions(id, channel, path, status, quality, created, kind, source_url, "
+                          "platform, channel_url) VALUES(?, ?, ?, 'recording', ?, ?, ?, ?, ?, ?)",
+                          (sid, channel, path, quality, time.time(), kind, source_url, platform, channel_url))
 
     def set_session_start(self, sid: str, start_wall: float) -> None:
         self.conn.execute("UPDATE sessions SET start_wall=? WHERE id=?", (start_wall, sid))
