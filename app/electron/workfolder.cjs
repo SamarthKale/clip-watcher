@@ -33,4 +33,25 @@ function prepare(dir, resourcesPath) {
   return { created: true };
 }
 
-module.exports = { readChoice, saveChoice, prepare };
+function forget(userData) {
+  fs.rmSync(path.join(userData, CHOICE), { force: true });
+}
+
+/**
+ * The work folder for this launch: the override (SPIKECUT_WORK_DIR), else the remembered choice, else
+ * ask(). It is remembered only once it has been prepared, so a folder that can't be used is asked
+ * about again next time. Throws "Spikecut can't use the folder ..." when it can't be prepared.
+ */
+function setUp({ userData, override, resourcesPath, ask }) {
+  const remembered = override ? null : readChoice(userData);
+  const dir = override || remembered || ask();
+  try {
+    prepare(dir, resourcesPath);
+  } catch (e) {
+    throw new Error(`Spikecut can't use the folder ${dir}: ${e.message}`);
+  }
+  if (!override && !remembered) saveChoice(userData, dir);
+  return dir;
+}
+
+module.exports = { readChoice, saveChoice, prepare, forget, setUp };

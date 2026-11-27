@@ -234,34 +234,50 @@ async function confirmQuit() {
 }
 
 /** Installed app: the folder for recordings, clips and Shorts (asked once, then remembered). */
+function askWorkDir() {
+  const suggested = path.join(app.getPath('documents'), 'Spikecut');
+  const r = dialog.showMessageBoxSync({
+    type: 'question',
+    buttons: [`Use ${suggested}`, 'Choose a folder…'],
+    defaultId: 0,
+    cancelId: 0,
+    title: 'Spikecut',
+    message: 'Where should Spikecut keep recordings, clips and Shorts?',
+    detail: 'Recordings are large, so pick a drive with plenty of free space. If you have used Spikecut before, choose that folder to keep your work.',
+  });
+  if (r === 1) {
+    const picked = dialog.showOpenDialogSync({ title: 'Spikecut work folder', defaultPath: suggested, properties: ['openDirectory', 'createDirectory'] });
+    if (picked && picked[0]) return picked[0];
+  }
+  return suggested;
+}
+
+/** The work folder, or null when the user gives up after a folder that can't be used. */
 function chooseWorkDir() {
   const userData = app.getPath('userData');
-  let dir = process.env.SPIKECUT_WORK_DIR || workfolder.readChoice(userData);
-  if (!dir) {
-    const suggested = path.join(app.getPath('documents'), 'Spikecut');
-    const r = dialog.showMessageBoxSync({
-      type: 'question',
-      buttons: [`Use ${suggested}`, 'Choose a folder…'],
-      defaultId: 0,
-      cancelId: 0,
-      title: 'Spikecut',
-      message: 'Where should Spikecut keep recordings, clips and Shorts?',
-      detail: 'Recordings are large, so pick a drive with plenty of free space. If you have used Spikecut before, choose that folder to keep your work.',
-    });
-    dir = suggested;
-    if (r === 1) {
-      const picked = dialog.showOpenDialogSync({ title: 'Spikecut work folder', defaultPath: suggested, properties: ['openDirectory', 'createDirectory'] });
-      if (picked && picked[0]) dir = picked[0];
+  for (;;) {
+    try {
+      return workfolder.setUp({ userData, override: process.env.SPIKECUT_WORK_DIR, resourcesPath: process.resourcesPath, ask: askWorkDir });
+    } catch (e) {
+      const r = dialog.showMessageBoxSync({
+        type: 'error',
+        buttons: ['Choose another folder', 'Quit'],
+        defaultId: 0,
+        cancelId: 1,
+        title: 'Spikecut',
+        message: String(e.message || e),
+        detail: 'If it is on a drive that is not connected, connect it and start Spikecut again.',
+      });
+      if (r === 1 || process.env.SPIKECUT_WORK_DIR) return null;
+      workfolder.forget(userData);
     }
-    workfolder.saveChoice(userData, dir);
   }
-  workfolder.prepare(dir, process.resourcesPath);
-  return dir;
 }
 
 async function boot() {
   Menu.setApplicationMenu(null);
   const workDir = app.isPackaged ? chooseWorkDir() : undefined;
+  if (app.isPackaged && !workDir) return app.exit(0);
   RT = resolveRuntime({
     isPackaged: app.isPackaged,
     resourcesPath: process.resourcesPath,

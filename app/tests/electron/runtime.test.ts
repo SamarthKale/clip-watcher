@@ -106,6 +106,41 @@ describe('work folder', () => {
     expect(fs.readFileSync(path.join(dir, 'config.toml'), 'utf8')).toBe(mine);
   });
 
+  it('first run asks once, prepares the folder and remembers it', () => {
+    const userData = tmp();
+    const dir = path.join(tmp(), 'Spikecut');
+    let asked = 0;
+    const got = workfolder.setUp({ userData, resourcesPath: fakeResources(), ask: () => { asked++; return dir; } });
+    expect(got).toBe(dir);
+    expect(asked).toBe(1);
+    expect(fs.existsSync(path.join(dir, 'config.toml'))).toBe(true);
+    expect(workfolder.readChoice(userData)).toBe(dir);
+    // next launch: no question
+    expect(workfolder.setUp({ userData, resourcesPath: fakeResources(), ask: () => { throw new Error('asked again'); } })).toBe(dir);
+  });
+
+  it('a folder that cannot be used is not remembered, so the next launch asks again', () => {
+    const userData = tmp();
+    const blocker = path.join(tmp(), 'not-a-folder');
+    fs.writeFileSync(blocker, 'a file where the folder should be');
+    expect(() => workfolder.setUp({ userData, resourcesPath: fakeResources(), ask: () => blocker })).toThrow(/can't use/);
+    expect(workfolder.readChoice(userData)).toBeNull();
+  });
+
+  it('forget() drops a remembered folder (to pick another after an error)', () => {
+    const userData = tmp();
+    workfolder.saveChoice(userData, 'E:\\gone');
+    workfolder.forget(userData);
+    expect(workfolder.readChoice(userData)).toBeNull();
+  });
+
+  it('SPIKECUT_WORK_DIR is used as is and never remembered', () => {
+    const userData = tmp();
+    const dir = path.join(tmp(), 'override');
+    expect(workfolder.setUp({ userData, override: dir, resourcesPath: fakeResources(), ask: () => { throw new Error('asked'); } })).toBe(dir);
+    expect(workfolder.readChoice(userData)).toBeNull();
+  });
+
   it('remembers the chosen folder', () => {
     const userData = tmp();
     expect(workfolder.readChoice(userData)).toBeNull();
