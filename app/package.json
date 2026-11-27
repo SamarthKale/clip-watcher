@@ -10,7 +10,8 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "test:ui": "vite build && playwright test",
-    "test:all": "vitest run && npm run test:ui"
+    "test:all": "vitest run && npm run test:ui",
+    "desktop": "npm run build:ui && electron ."
   },
   "dependencies": {
     "@fastify/static": "^8.0.0",
@@ -28,10 +29,15 @@
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^4.3.0",
+    "electron": "^45.5.0",
+    "electron-builder": "^26.18.0",
     "tailwindcss": "^4.0.0",
     "tsx": "^4.19.0",
     "typescript": "^5.6.0",
     "vite": "^6.0.0",
     "vitest": "^3.0.0"
-  }
+  },
+  "main": "electron/main.cjs",
+  "description": "Clip Watcher: record streams, clip the best moments, edit with Claude, review and publish.",
+  "productName": "Clip Watcher"
 }

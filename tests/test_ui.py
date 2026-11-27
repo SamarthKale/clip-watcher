@@ -1,4 +1,5 @@
 import json
+import os
 import threading
 import tempfile
 import time
@@ -168,6 +169,39 @@ class ApiTests(unittest.TestCase):
         self.assertEqual((run["deleted"], len(run["refused"])), ([], 1))
         self.assertTrue(ed.exists())
         self.assertEqual(self.call("/api/storage/plan", {"older_than_days": "abc"})[1]["ok"], False)
+
+    def test_shorts_list_skips_unfinished_edits(self):
+        from pathlib import Path as P
+        root = P(self.dash.cfg.raw["storage"]["edited_dir"]) / "abc" / "2026-11-18"
+        for name, finished in (("abc-1", True), ("abc-2", False)):
+            d = root / name
+            d.mkdir(parents=True)
+            (d / "short.mp4").write_bytes(b"x")
+            if finished:
+                (d / "metadata.json").write_text("{}", encoding="utf-8")
+        self.assertEqual([x["event_id"] for x in self.call("/api/shorts")[1]], ["abc-1"])
+
+    def test_setup_lists_every_tool_with_a_reason(self):
+        r = self.call("/api/setup")[1]
+        names = [t["name"] for t in r["tools"]]
+        for need in ("streamlink", "ffmpeg", "ffprobe", "yt-dlp"):
+            self.assertIn(need, names)
+        for t in r["tools"]:
+            self.assertEqual(set(t), {"name", "path", "ok", "hint", "needed_for"})
+        self.assertEqual(r["ok"], all(t["ok"] for t in r["tools"]))
+
+    def test_api_token_is_required_when_configured(self):
+        os.environ["CLIPPER_API_TOKEN"] = "s3cret"
+        self.addCleanup(os.environ.pop, "CLIPPER_API_TOKEN", None)
+        self.assertEqual(self.call("/api/health")[0], 401)
+        self.assertEqual(self.call("/api/storage/run", {"ids": []})[0], 401)
+        req = urllib.request.Request(self.base + "/api/health", headers={"x-clipper-token": "s3cret"})
+        with urllib.request.urlopen(req, timeout=10) as r:
+            self.assertEqual(r.status, 200)
+        bad = urllib.request.Request(self.base + "/api/health", headers={"x-clipper-token": "wrong"})
+        with self.assertRaises(urllib.error.HTTPError) as cm:
+            urllib.request.urlopen(bad, timeout=10)
+        self.assertEqual(cm.exception.code, 401)
 
     def test_foreign_host_header_is_refused(self):
         req = urllib.request.Request(self.base + "/api/health", headers={"Host": "evil.example"})

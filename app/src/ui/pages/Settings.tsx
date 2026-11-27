@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { api, errorText } from '../api';
-import { Button, Card, ErrorBanner, Field, Icon, Notice, PageHeader, Spinner, Toggle, inputCls, usePoll } from '../components/ui';
+import { Button, Card, ErrorBanner, Field, Icon, Notice, PageHeader, Spinner, Toggle, inputCls, selectCls, usePoll } from '../components/ui';
 import type { Settings } from '../types';
 
 export function SettingsPage() {
@@ -32,6 +32,32 @@ export function SettingsPage() {
       {note && <div className="mb-3 text-sm text-emerald-600" role="status">{note}</div>}
 
       <Card className="mb-4 space-y-3">
+        <h2 className="font-semibold">Publishing</h2>
+        <p className="text-sm text-zinc-500">Finished Shorts appear in the Clip Watcher library automatically. Choose what happens to them next.</p>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <label className={`cursor-pointer rounded-xl border p-3 ${form.publishMode === 'review' ? 'border-indigo-500 bg-indigo-500/10' : 'border-zinc-300/60 dark:border-zinc-700'}`}>
+            <input type="radio" name="mode" className="mr-2" checked={form.publishMode === 'review'} onChange={() => setForm({ ...form, publishMode: 'review' })} />
+            <b>Review first</b>
+            <p className="mt-1 text-sm text-zinc-500">Every Short waits in Review &amp; publish. You watch it, edit the text, and approve it before anything goes to YouTube.</p>
+          </label>
+          <label className={`cursor-pointer rounded-xl border p-3 ${form.publishMode === 'auto' ? 'border-indigo-500 bg-indigo-500/10' : 'border-zinc-300/60 dark:border-zinc-700'}`}>
+            <input type="radio" name="mode" className="mr-2" checked={form.publishMode === 'auto'} onChange={() => setForm({ ...form, publishMode: 'auto' })} />
+            <b>Auto-publish</b>
+            <p className="mt-1 text-sm text-zinc-500">New Shorts upload by themselves with the visibility below. Your YouTube daily limits still apply.</p>
+          </label>
+        </div>
+        <Field label="Visibility for uploads" hint="Private is safest while you try auto-publish: you can make a video public on YouTube yourself.">
+          <select className={selectCls} value={form.autoVisibility} onChange={(e) => setForm({ ...form, autoVisibility: e.target.value as Settings['autoVisibility'] })} aria-label="Visibility">
+            <option value="private">Private</option><option value="unlisted">Unlisted</option><option value="public">Public</option>
+          </select>
+        </Field>
+        <p className="text-xs text-zinc-500">Changing this only affects Shorts that are not queued yet. Library folder: {form.libraryDir || 'not set'}</p>
+        <Button variant="primary" onClick={saveSettings}>Save publishing settings</Button>
+      </Card>
+
+      <details className="mb-4">
+        <summary className="cursor-pointer text-sm text-zinc-500">Advanced: Gemini (optional, not used by Clip Watcher; titles and descriptions come from Claude)</summary>
+      <Card className="mt-3 mb-4 space-y-3">
         <h2 className="font-semibold">AI (Gemini)</h2>
         <p className="text-sm text-zinc-500">A Gemini API key from Google AI Studio is separate from any Google or Gemini subscription. The key is stored encrypted on this PC and is never shown again or sent to the browser.</p>
         <Field label={form.geminiKeySet ? 'Gemini API key (saved; enter a new one to replace)' : 'Gemini API key'}>
@@ -76,6 +102,7 @@ export function SettingsPage() {
           <p className="mt-1 text-amber-900 dark:text-amber-200">When on, a few small still frames sampled from each video (and the file name) leave this computer and are sent to Google to write the title and description. Your video files are never uploaded to the AI provider. When off, no AI generation happens and you can write metadata by hand.</p>
         </div>
       </Card>
+      </details>
 
       <Card className="mb-4 space-y-3">
         <h2 className="font-semibold">Processing</h2>

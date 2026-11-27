@@ -6,24 +6,39 @@ import { Library } from './pages/Library';
 import { Queue } from './pages/Queue';
 import { History } from './pages/History';
 import { Accounts } from './pages/Accounts';
+import { Home } from './pages/Home';
+import { Spikes } from './pages/Spikes';
+import { Shorts } from './pages/Shorts';
+import { Vod } from './pages/Vod';
+import { Usage } from './pages/Usage';
+import { Storage } from './pages/Storage';
+import { LogPage } from './pages/LogPage';
 import { SettingsPage } from './pages/Settings';
 import { api } from './api';
 import { Icon, usePoll } from './components/ui';
 
-const PAGES: { id: string; label: string; icon: string; Page: ComponentType }[] = [
-  { id: 'dashboard', label: 'Dashboard', icon: 'grid', Page: Dashboard },
-  { id: 'folders', label: 'Folders', icon: 'folder', Page: Folders },
-  { id: 'profiles', label: 'AI Profiles', icon: 'sparkles', Page: Profiles },
-  { id: 'library', label: 'Video Library', icon: 'film', Page: Library },
-  { id: 'queue', label: 'Processing Queue', icon: 'list', Page: Queue },
-  { id: 'history', label: 'Upload History', icon: 'clock', Page: History },
-  { id: 'accounts', label: 'Accounts & Channels', icon: 'user', Page: Accounts },
+const PAGES: { id: string; label: string; icon: string; Page: ComponentType; hidden?: boolean }[] = [
+  { id: 'home', label: 'Home', icon: 'grid', Page: Home },
+  { id: 'spikes', label: 'Spikes & clips', icon: 'sparkles', Page: Spikes },
+  { id: 'shorts', label: 'Shorts', icon: 'film', Page: Shorts },
+  { id: 'library', label: 'Review & publish', icon: 'check', Page: Library },
+  { id: 'vod', label: 'Add a VOD', icon: 'external', Page: Vod },
+  { id: 'log', label: 'Live log', icon: 'list', Page: LogPage },
+  { id: 'usage', label: 'Claude usage', icon: 'info', Page: Usage },
+  { id: 'storage', label: 'Storage', icon: 'folder', Page: Storage },
+  { id: 'queue', label: 'Upload queue', icon: 'upload', Page: Queue },
+  { id: 'history', label: 'Upload history', icon: 'clock', Page: History },
+  { id: 'accounts', label: 'YouTube account', icon: 'user', Page: Accounts },
   { id: 'settings', label: 'Settings', icon: 'settings', Page: SettingsPage },
+  // Still reachable by address, but not needed any more: folders are automatic and titles come from Claude.
+  { id: 'dashboard', label: 'Upload dashboard', icon: 'grid', Page: Dashboard, hidden: true },
+  { id: 'folders', label: 'Folders', icon: 'folder', Page: Folders, hidden: true },
+  { id: 'profiles', label: 'AI Profiles', icon: 'sparkles', Page: Profiles, hidden: true },
 ];
 
 const routeFromHash = () => {
   const r = location.hash.replace(/^#\/?/, '');
-  return PAGES.some((p) => p.id === r) ? r : 'dashboard';
+  return PAGES.some((p) => p.id === r) ? r : 'home';
 };
 
 interface Shell {
@@ -68,16 +83,16 @@ export function App() {
   return (
     <div className="min-h-screen lg:flex">
       <header className="sticky top-0 z-30 flex items-center justify-between border-b border-zinc-200 bg-white/90 px-4 py-3 backdrop-blur lg:hidden dark:border-zinc-800 dark:bg-zinc-950/90">
-        <div className="flex items-center gap-2 font-semibold"><span className="grid h-7 w-7 place-items-center rounded-lg bg-indigo-600 text-white"><Icon name="upload" /></span>LocalTube</div>
+        <div className="flex items-center gap-2 font-semibold"><span className="grid h-7 w-7 place-items-center rounded-lg bg-indigo-600 text-white"><Icon name="upload" /></span>Clip Watcher</div>
         <button aria-label="Menu" className="rounded-lg p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800" onClick={() => setMenu(!menu)}><Icon name={menu ? 'x' : 'menu'} className="h-5 w-5" /></button>
       </header>
       <nav
         aria-label="Main"
         className={`${menu ? 'flex' : 'hidden'} fixed inset-x-0 top-[53px] bottom-0 z-20 flex-col gap-1 overflow-y-auto bg-zinc-50 p-4 lg:sticky lg:top-0 lg:flex lg:h-screen lg:w-60 lg:shrink-0 lg:border-r lg:border-zinc-200 dark:bg-zinc-950 lg:dark:border-zinc-800`}
       >
-        <div className="mb-5 hidden items-center gap-2 px-2 text-lg font-bold lg:flex"><span className="grid h-8 w-8 place-items-center rounded-lg bg-indigo-600 text-white"><Icon name="upload" className="h-4 w-4" /></span>LocalTube</div>
+        <div className="mb-5 hidden items-center gap-2 px-2 text-lg font-bold lg:flex"><span className="grid h-8 w-8 place-items-center rounded-lg bg-indigo-600 text-white"><Icon name="upload" className="h-4 w-4" /></span>Clip Watcher</div>
         <ul className="space-y-0.5">
-          {PAGES.map((p) => (
+          {PAGES.filter((p) => !p.hidden).map((p) => (
             <li key={p.id}>
               <a
                 href={`#/${p.id}`}

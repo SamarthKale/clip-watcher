@@ -177,6 +177,8 @@ class Dashboard:
         files = sorted(root.glob("*/*/*/short.mp4"), key=lambda p: p.stat().st_mtime, reverse=True)
         for p in files[:limit]:
             d = p.parent
+            if not (d / "metadata.json").exists():
+                continue  # an edit still in progress (or interrupted): short.mp4 may be incomplete
             try:
                 key = (str(p), p.stat().st_mtime)
                 if key not in self.duration_cache:
@@ -359,6 +361,15 @@ class Handler(BaseHTTPRequestHandler):
         pass
 
     # -- plumbing
+    def _token_ok(self) -> bool:
+        """When CLIPPER_API_TOKEN is set (the desktop app sets it), every API and media call needs it."""
+        want = os.environ.get("CLIPPER_API_TOKEN")
+        if not want:
+            return True
+        got = self.headers.get("x-clipper-token") or ""
+        import hmac
+        return hmac.compare_digest(got, want)
+
     def _host_ok(self) -> bool:
         host = (self.headers.get("Host") or "").split(":")[0]
         return host in ("127.0.0.1", "localhost", "[::1]")
@@ -469,6 +480,8 @@ class Handler(BaseHTTPRequestHandler):
         if not self._host_ok():
             return self._send(403, b"forbidden", "text/plain")
         url = urlparse(self.path)
+        if (url.path.startswith("/api/") or url.path.startswith("/media/")) and not self._token_ok():
+            return self._send(401, b'{"error": "unauthorized"}')
         q = parse_qs(url.query)
         ch = (q.get("channel", [""])[0] or "").strip()
         try:
@@ -482,6 +495,16 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(self.dash.state(ch))
             if url.path == "/api/chat":
                 return self._json(self.dash.chat(ch))
+            if url.path == "/api/setup":
+                from .cli import tool_status
+                from .storage import drive_ready, raw_archive_root
+                tools = tool_status(self.dash.cfg)
+                root = raw_archive_root(self.dash.cfg)
+                drive = None
+                if root is not None:
+                    ok, why = drive_ready(root)
+                    drive = {"path": str(root), "ok": ok, "why": "" if ok else why}
+                return self._json({"tools": tools, "ok": all(t["ok"] for t in tools), "backup_drive": drive})
             if url.path == "/api/health":
                 return self._json({"ok": True, "service": "clipwatcher"})
             if url.path == "/api/paths":
@@ -530,6 +553,8 @@ class Handler(BaseHTTPRequestHandler):
     def do_POST(self):  # noqa: N802
         if not self._host_ok():
             return self._send(403, b"forbidden", "text/plain")
+        if not self._token_ok():
+            return self._send(401, b'{"error": "unauthorized"}')
         origin = self.headers.get("Origin")
         if origin and urlparse(origin).hostname not in ("127.0.0.1", "localhost", "::1"):
             return self._send(403, b"forbidden", "text/plain")

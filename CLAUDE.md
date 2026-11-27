@@ -28,6 +28,12 @@ ffmpeg/ffprobe, whisper.cpp (`whisper-cli`) and Claude Code.
 7. `storage`: `storage.py` verifies the raw and edited clips, backs up raw clips to the external
    drive (SHA-256-verified), and deletes a recording only after all its clips are verified and
    backed up. Recordings with no clips are moved to the external drive and kept.
+8. `library.py` publishes each finished Short to `Shorts/<date>/<channel>__<live|vod>/` (video, cover,
+   thumbnail, `clips.json`, `POST.md`). `usage.py` records Claude usage per edit attempt.
+   `vod.py` (stage `vodwork`) turns VOD links and the watch list into recording sessions.
+   `cleanup.py` is the storage manager (scan, plan, run; refuses unsafe deletes).
+9. `ui.py` is the pipeline's local JSON API. `app/` (Node, React, Electron) is the desktop product: its
+   server uploads to YouTube and proxies the pipeline API; see `docs/product.md`.
 
 Queues live in SQLite (`data/clipwatcher.db`, `db.py`). Each stage has its own queue with a lease,
 retries and backoff.

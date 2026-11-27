@@ -63,6 +63,17 @@ python -m clipwatcher run --channel SOME_CHANNEL
 `run` starts every stage, and each one restarts if it crashes. Stop it with Ctrl+C. To run for a
 fixed time, use `--for 600` (seconds).
 
+### Desktop app
+
+```bash
+cd app && npm run desktop        # or double-click "Clip Watcher.cmd"
+```
+
+One window for everything: start or stop watching a Twitch channel, paste links of finished streams
+(Twitch, YouTube, Kick) or keep a streamer watch list, review the Shorts Claude edited, publish them to
+YouTube (review first, or automatically), see what Claude used per video, and clean up old clips. See
+[docs/product.md](docs/product.md).
+
 ### Dashboard
 
 ```bash

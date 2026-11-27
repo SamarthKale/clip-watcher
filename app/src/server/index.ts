@@ -33,14 +33,6 @@ async function main() {
     tempDir: app.deps.tempDir,
   });
 
-  await app.listen({ host: '127.0.0.1', port: PORT });
-  const url = `http://127.0.0.1:${PORT}/#token=${token}`;
-  log.info('server started', { port: PORT });
-  console.log(`LocalTube running: ${url}`);
-  if (process.platform === 'win32' && !process.env.LOCALTUBE_NO_OPEN) {
-    spawn('cmd', ['/c', 'start', '', url], { detached: true, stdio: 'ignore' }).unref();
-  }
-
   // Graceful shutdown: stop taking work, pause the active upload with its session saved, flush the DB.
   let closing = false;
   const shutdown = async (signal: string) => {
@@ -52,6 +44,21 @@ async function main() {
     db.close();
     process.exit(0);
   };
+  // The desktop app asks for a clean stop here (Windows has no gentle signal for a child process).
+  // Behind the same token as every other /api route.
+  app.post('/api/shutdown', async () => {
+    setTimeout(() => void shutdown('api'), 50);
+    return { ok: true };
+  });
+
+  await app.listen({ host: '127.0.0.1', port: PORT });
+  const url = `http://127.0.0.1:${PORT}/#token=${token}`;
+  log.info('server started', { port: PORT });
+  console.log(`LocalTube running: ${url}`);
+  if (process.platform === 'win32' && !process.env.LOCALTUBE_NO_OPEN) {
+    spawn('cmd', ['/c', 'start', '', url], { detached: true, stdio: 'ignore' }).unref();
+  }
+
   process.on('SIGINT', () => void shutdown('SIGINT'));
   process.on('SIGTERM', () => void shutdown('SIGTERM'));
 }

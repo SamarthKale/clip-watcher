@@ -88,6 +88,9 @@ export interface Settings {
   queuePaused: boolean;
   geminiKeySet: boolean;
   enhanceImports: boolean;
+  publishMode: 'review' | 'auto';
+  autoVisibility: 'private' | 'unlisted' | 'public';
+  libraryDir: string;
 }
 
 export interface HistoryRow {

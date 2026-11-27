@@ -11,8 +11,11 @@ export function pipelineUrl(): string {
  * cookie lock as every other /api route, so the pipeline API is never reached from a web page.
  * Only the endpoints Clip Watcher defines are forwarded (a fixed allow-list, no free-form paths).
  */
-const ALLOWED_GET = /^(state|chat|shorts|logs|usage|vod|watch|storage|paths|health)$/;
+const ALLOWED_GET = /^(state|chat|shorts|logs|usage|vod|watch|storage|paths|health|setup)$/;
 const ALLOWED_POST = /^(start|stop|skip|retry|open|vod\/add|vod\/retry|watch\/add|watch\/remove|watch\/check|storage\/plan|storage\/run)$/;
+
+/** Shared secret the desktop app gives both servers, so no other program can use the pipeline API. */
+const authHeaders = (): Record<string, string> => (process.env.PIPELINE_TOKEN ? { 'x-clipper-token': process.env.PIPELINE_TOKEN } : {});
 
 export function registerPipelineRoutes(app: FastifyInstance, base: () => string = pipelineUrl): void {
   const offline = (reply: { code(n: number): { send(b: unknown): unknown } }) =>
@@ -22,7 +25,7 @@ export function registerPipelineRoutes(app: FastifyInstance, base: () => string 
     if (!ALLOWED_GET.test(req.params.name)) return reply.code(404).send({ error: 'not found' });
     const qs = new URLSearchParams(req.query as Record<string, string>).toString();
     try {
-      const r = await fetch(`${base()}/api/${req.params.name}${qs ? `?${qs}` : ''}`, { signal: AbortSignal.timeout(15_000) });
+      const r = await fetch(`${base()}/api/${req.params.name}${qs ? `?${qs}` : ''}`, { headers: authHeaders(), signal: AbortSignal.timeout(15_000) });
       return reply.code(r.status).type('application/json').send(await r.text());
     } catch {
       return offline(reply);
@@ -35,7 +38,7 @@ export function registerPipelineRoutes(app: FastifyInstance, base: () => string 
     try {
       const r = await fetch(`${base()}/api/${name}`, {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: { 'content-type': 'application/json', ...authHeaders() },
         body: JSON.stringify(req.body ?? {}),
         signal: AbortSignal.timeout(60_000),
       });
@@ -51,7 +54,7 @@ export function registerPipelineRoutes(app: FastifyInstance, base: () => string 
       return reply.code(404).send({ error: 'not found' });
     }
     try {
-      const headers: Record<string, string> = {};
+      const headers: Record<string, string> = authHeaders();
       if (typeof req.headers.range === 'string') headers.range = req.headers.range;
       const r = await fetch(`${base()}/media/${req.params.id}/${req.params.name}`, { headers });
       reply.code(r.status);

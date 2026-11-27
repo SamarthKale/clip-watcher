@@ -7,6 +7,10 @@ import { fixture } from '../fixtures/make-fixtures';
 
 /** Clicks a sidebar link (the dashboard text also links to some pages). */
 const nav = (page: Page, name: string) => page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name }).click();
+/** Pages that are no longer in the sidebar (folders are automatic) are still reachable by address. */
+const open = async (page: Page, route: string) => {
+  await page.goto(url.split('#')[0] + '#/' + route);
+};
 
 let server: ChildProcess;
 let url = '';
@@ -36,13 +40,15 @@ test.afterAll(() => {
 test('add a folder, scan it, edit metadata by hand, and never expose the API key', async ({ page }) => {
   await page.goto(url);
 
-  // The launch token is removed from the address bar after load.
-  await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
+  // The launch token is removed from the address bar after load; Home is the landing page.
+  await expect(page.getByRole('heading', { name: 'Home' })).toBeVisible();
   await expect.poll(() => page.url()).not.toContain('token=');
+  await open(page, 'dashboard');
+  await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
   await expect(page.getByText('No data yet')).toBeVisible();
 
   // Folders: add through the (stubbed) folder dialog, then scan.
-  await nav(page, 'Folders');
+  await open(page, 'folders');
   await page.getByRole('button', { name: 'Add folder' }).click();
   await expect(page.getByTestId('folder-name')).toHaveText(path.basename(videosDir));
   await page.getByRole('button', { name: 'Scan now' }).click();
@@ -54,7 +60,7 @@ test('add a folder, scan it, edit metadata by hand, and never expose the API key
   await expect(page.getByTestId('scan-result')).toContainText('clips.json: 1 updated');
 
   // Library: the video is listed with its duration, and its title came from the JSON.
-  await nav(page, 'Video Library');
+  await nav(page, 'Review & publish');
   const row = page.getByTestId('video-row');
   await expect(row).toHaveCount(1);
   await expect(row).toContainText('my clip.mp4');
@@ -74,16 +80,18 @@ test('add a folder, scan it, edit metadata by hand, and never expose the API key
   await expect(page.getByTestId('video-row')).toContainText('Written by you');
 
   // The shell shows the pipeline on the dashboard.
-  await nav(page, 'Dashboard');
+  await open(page, 'dashboard');
   await expect(page.getByTestId('count-detected')).toHaveText('1');
   await expect(page.getByTestId('count-metadataReady')).toHaveText('1');
 
   // Settings: the Gemini key is write-only and never shown back.
   await nav(page, 'Settings');
+  await page.getByText('Advanced: Gemini').click();
   await page.getByLabel('Gemini API key').fill('SECRET-KEY-VALUE-123');
   await page.getByRole('button', { name: 'Save key' }).click();
   await expect(page.getByRole('status')).toContainText('API key saved');
   await page.reload();
+  await page.getByText('Advanced: Gemini').click();
   await expect(page.getByText('saved; enter a new one to replace')).toBeVisible();
   expect(await page.content()).not.toContain('SECRET-KEY-VALUE-123');
   expect(await page.getByLabel('Gemini API key').inputValue()).toBe('');

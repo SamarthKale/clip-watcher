@@ -408,6 +408,28 @@ def _check(cfg, quiet=False) -> list[str]:
     return problems
 
 
+def tool_status(cfg) -> list[dict]:
+    """Every external tool the product needs: name, where it was found (or None) and how to get it."""
+    rows = [("streamlink", cfg["record"]["streamlink"], "pip install streamlink", "recording live streams"),
+            ("ffmpeg", cfg["extract"]["ffmpeg"], "https://www.gyan.dev/ffmpeg/builds/", "cutting and editing video"),
+            ("ffprobe", cfg["extract"]["ffprobe"], "comes with ffmpeg", "reading video files")]
+    if cfg["transcribe"]["enabled"]:
+        rows.append(("whisper-cli", cfg["transcribe"]["whisper_cli"],
+                     "https://github.com/ggml-org/whisper.cpp/releases", "subtitles (Hindi, English, Hinglish)"))
+    rows.append(("yt-dlp", cfg["vod"]["ytdlp"], "https://github.com/yt-dlp/yt-dlp/releases", "YouTube and Kick links"))
+    if cfg["edit"]["mode"] == "claude":
+        rows.append(("claude", cfg["edit"]["claude"], "https://claude.com/claude-code", "editing Shorts"))
+    out = []
+    for name, binary, hint, why in rows:
+        path = which(binary) or (str(cfg.resolve(binary)) if cfg.resolve(binary).exists() else None)
+        out.append({"name": name, "path": path, "ok": bool(path), "hint": hint, "needed_for": why})
+    if cfg["transcribe"]["enabled"]:
+        model = cfg.resolve(cfg["transcribe"]["model"])
+        out.append({"name": "speech model", "path": str(model) if model.exists() else None, "ok": model.exists(),
+                    "hint": "https://huggingface.co/ggerganov/whisper.cpp", "needed_for": "subtitles"})
+    return out
+
+
 def cmd_check(cfg, db, args):
     from .soundlib import load_library, usable_items
     from .storage import drive_ready, edited_root, raw_archive_root, recordings_archive_root

@@ -6,14 +6,14 @@ import { buildApp } from '../../src/server/app.js';
 
 const H = { 'x-localtube-token': 't' };
 let fake: http.Server;
-const seen: { method?: string; url?: string; body?: string; range?: string }[] = [];
+const seen: { method?: string; url?: string; body?: string; range?: string; token?: string }[] = [];
 
 beforeAll(async () => {
   fake = http.createServer((req, res) => {
     let body = '';
     req.on('data', (c) => (body += c));
     req.on('end', () => {
-      seen.push({ method: req.method, url: req.url, body, range: req.headers.range as string | undefined });
+      seen.push({ method: req.method, url: req.url, body, range: req.headers.range as string | undefined, token: req.headers['x-clipper-token'] as string | undefined });
       if (req.url?.startsWith('/media/')) {
         res.writeHead(206, { 'content-type': 'video/mp4', 'content-range': 'bytes 0-3/10', 'accept-ranges': 'bytes', 'content-length': '4' });
         return res.end('abcd');
@@ -45,6 +45,17 @@ describe('pipeline proxy', () => {
     const r = await a.inject({ method: 'GET', url: '/api/pipeline/state?channel=abc', headers: H });
     expect(r.statusCode).toBe(200);
     expect(r.json()).toMatchObject({ ok: true, url: '/api/state?channel=abc' });
+    await a.close();
+  });
+
+  it('sends the shared secret to the pipeline when one is configured', async () => {
+    process.env.PIPELINE_TOKEN = 'shh';
+    const a = app();
+    await a.inject({ method: 'GET', url: '/api/pipeline/state', headers: H });
+    await a.inject({ method: 'POST', url: '/api/pipeline/stop', headers: H, payload: {} });
+    await a.inject({ method: 'GET', url: '/api/pipeline-media/abc/short.mp4', headers: H });
+    expect(seen.slice(-3).map((x) => x.token)).toEqual(['shh', 'shh', 'shh']);
+    delete process.env.PIPELINE_TOKEN;
     await a.close();
   });
 
