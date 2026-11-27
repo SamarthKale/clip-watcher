@@ -420,8 +420,12 @@ def tool_status(cfg) -> list[dict]:
     if cfg["edit"]["mode"] == "claude":
         rows.append(("claude", cfg["edit"]["claude"], "https://claude.com/claude-code", "editing Shorts"))
     out = []
+    from .recorder import streamlink_command
     for name, binary, hint, why in rows:
         path = which(binary) or (str(cfg.resolve(binary)) if cfg.resolve(binary).exists() else None)
+        if name == "streamlink" and not path:  # the installed app runs streamlink from its own Python
+            cmd = streamlink_command(cfg)
+            path = " ".join(cmd) if cmd else None
         out.append({"name": name, "path": path, "ok": bool(path), "hint": hint, "needed_for": why})
     if cfg["transcribe"]["enabled"]:
         model = cfg.resolve(cfg["transcribe"]["model"])

@@ -238,9 +238,18 @@ class Config:
         return p if p.is_absolute() else self.data_dir / p
 
     def resolve(self, value: str) -> Path:
-        """Resolve a user-supplied relative path (e.g. a model file) against root."""
+        """Resolve a user-supplied relative path (e.g. a model file) against root.
+
+        The installed app ships some files (the speech model) in its own resources folder
+        (CLIPPER_RESOURCES); a relative path missing from root falls back to that copy."""
         p = Path(value)
-        return p if p.is_absolute() else self.root / p
+        if p.is_absolute():
+            return p
+        local = self.root / p
+        res = os.environ.get("CLIPPER_RESOURCES")
+        if not local.exists() and res and (Path(res) / p).exists():
+            return Path(res) / p
+        return local
 
     @property
     def oauth_token(self) -> str:

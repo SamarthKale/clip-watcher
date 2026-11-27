@@ -21,6 +21,7 @@ import { registerHistoryRoutes } from './routes/history.js';
 import { registerDashboardRoutes } from './routes/dashboard.js';
 import { registerVideoRoutes } from './routes/videos.js';
 import { registerPipelineRoutes } from './routes/pipeline.js';
+import { launchInWindow, registerClaudeRoutes, type WindowCommand } from './claude.js';
 import { createAccountAuth, type AccountAuth } from './youtube/accounts.js';
 import { GOOGLE_ENDPOINTS, type GoogleEndpoints } from './youtube/oauth.js';
 
@@ -37,6 +38,8 @@ export interface AppDeps {
   tempDir: () => string;
   oauthEndpoints: GoogleEndpoints;
   auth: AccountAuth;
+  /** Opens a visible console window (Claude Code install and sign-in). */
+  launch: (c: WindowCommand) => void;
 }
 
 export type AppInit = Pick<AppDeps, 'db' | 'token'> & Partial<Omit<AppDeps, 'db' | 'token'>>;
@@ -65,6 +68,7 @@ export function buildApp(init: AppInit): FastifyInstance {
   const deps: AppDeps = {
     sessionSecret: crypto.randomBytes(32).toString('hex'),
     pickFolder: nativePickFolder,
+    launch: launchInWindow,
     getProvider: makeProviderGetter(init.db, secrets),
     tempDir: () => getSettings(init.db).tempDir || path.join(os.tmpdir(), 'localtube-work'),
     auth: createAccountAuth({
@@ -120,9 +124,11 @@ export function buildApp(init: AppInit): FastifyInstance {
   registerDashboardRoutes(app);
   registerVideoRoutes(app);
   registerPipelineRoutes(app);
+  registerClaudeRoutes(app, deps.launch);
 
   // The built React UI (npm run build:ui). Absent in tests and during API-only development.
-  const uiDir = path.resolve(process.cwd(), 'dist', 'ui');
+  // The installed app keeps it next to the bundled server and points here with LOCALTUBE_UI_DIR.
+  const uiDir = process.env.LOCALTUBE_UI_DIR ? path.resolve(process.env.LOCALTUBE_UI_DIR) : path.resolve(process.cwd(), 'dist', 'ui');
   if (fs.existsSync(path.join(uiDir, 'index.html'))) {
     void app.register(fastifyStatic, { root: uiDir });
     app.setNotFoundHandler((req, reply) =>

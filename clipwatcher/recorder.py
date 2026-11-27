@@ -11,11 +11,13 @@ and streamlink goes straight back to waiting for the channel to be live.
 """
 from __future__ import annotations
 
+import importlib.util
 import logging
 import os
 import shutil
 import stat
 import subprocess
+import sys
 import threading
 import time
 from pathlib import Path
@@ -27,10 +29,22 @@ from .util import STOP, utc_stamp, which
 log = logging.getLogger("record")
 
 
+def streamlink_command(cfg: Config) -> list[str] | None:
+    """How to start streamlink: the configured program, or (in the installed app, where streamlink
+    is installed into Spikecut's own Python) `python -m streamlink`. None when it isn't available."""
+    configured = cfg["record"]["streamlink"]
+    found = which(configured)
+    if found:
+        return [found]
+    if configured == "streamlink" and importlib.util.find_spec("streamlink") is not None:
+        return [sys.executable, "-m", "streamlink"]
+    return None
+
+
 def build_command(cfg: Config, out_path: Path) -> list[str]:
     r = cfg["record"]
     cmd = [
-        r["streamlink"],
+        *(streamlink_command(cfg) or [r["streamlink"]]),
         f"twitch.tv/{cfg.channel}", r["quality"],
         "-o", str(out_path),
         "--retry-streams", str(r["retry_streams"]),
@@ -64,7 +78,7 @@ def _should_roll_over(cfg: Config, path: Path) -> bool:
 
 
 def record_forever(cfg: Config, db: DB) -> None:
-    if which(cfg["record"]["streamlink"]) is None:
+    if streamlink_command(cfg) is None:
         raise SystemExit("streamlink not found. Install it with:  pip install streamlink")
     channel = cfg.channel
     out_dir = cfg.path("recordings") / channel

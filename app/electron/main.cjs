@@ -14,12 +14,12 @@ const crypto = require('node:crypto');
 const net = require('node:net');
 const path = require('node:path');
 
-const APP_DIR = path.resolve(__dirname, '..');
-const ROOT = process.env.CLIPPER_ROOT ? path.resolve(process.env.CLIPPER_ROOT) : path.resolve(APP_DIR, '..');
-const DATA_DIR = process.env.LOCALTUBE_DATA || path.join(ROOT, 'data', 'uploader');
-const CONFIG = process.env.CLIPPER_CONFIG || path.join(ROOT, 'config.toml');
-const PYTHON = process.env.CLIPPER_PYTHON || 'python';
-const NODE = process.env.CLIPPER_NODE || 'node';
+const { resolveRuntime } = require('./runtime.cjs');
+const workfolder = require('./workfolder.cjs');
+
+// From the repo this is app/; installed it is resources/app.asar (the bundled main lives in dist/electron).
+const APP_DIR = app.isPackaged ? app.getAppPath() : path.resolve(__dirname, '..');
+let RT = null; // resolveRuntime(): which Python, server, folders and environment to use
 
 let win = null;
 let pyProc = null;
@@ -93,9 +93,9 @@ function splash(text, detail = '', failed = false) {
 async function startPipelineApi() {
   const port = await freePort();
   pipeBase = `http://127.0.0.1:${port}`;
-  pyProc = spawn(PYTHON, ['-m', 'clipwatcher', 'ui', '--no-open', '--port', String(port), '--config', CONFIG], {
-    cwd: ROOT,
-    env: { ...process.env, CLIPPER_API_TOKEN: API_TOKEN, PYTHONUTF8: '1', PYTHONPATH: [ROOT, process.env.PYTHONPATH].filter(Boolean).join(path.delimiter) },
+  pyProc = spawn(RT.python, ['-m', 'clipwatcher', 'ui', '--no-open', '--port', String(port), '--config', RT.config], {
+    cwd: RT.root,
+    env: { ...RT.childEnv, CLIPPER_API_TOKEN: API_TOKEN },
     stdio: ['ignore', 'pipe', 'pipe'],
     windowsHide: true,
   });
@@ -104,20 +104,19 @@ async function startPipelineApi() {
   pyProc.stdout.on('data', () => {});
   pyProc.on('exit', (code) => { if (!quitting && code) console.error('pipeline API exited', code, err); });
   const up = await waitFor(`${pipeBase}/api/health`, 25_000);
-  if (!up) throw new Error(`The clipping pipeline did not start.\n\nCommand: ${PYTHON} -m clipwatcher ui (in ${ROOT})\n\n${err}`);
+  if (!up) throw new Error(`The clipping pipeline did not start.\n\nCommand: ${RT.python} -m clipwatcher ui (in ${RT.root})\n\n${err}`);
 }
 
 async function startAppServer() {
   const paths = await (await fetch(`${pipeBase}/api/paths`, { headers: authed })).json();
-  fs.mkdirSync(DATA_DIR, { recursive: true });
+  fs.mkdirSync(RT.dataDir, { recursive: true });
   const port = await freePort();
-  const tsx = path.join(APP_DIR, 'node_modules', 'tsx', 'dist', 'cli.mjs');
-  srvProc = spawn(NODE, [tsx, 'src/server/index.ts'], {
-    cwd: APP_DIR,
+  srvProc = spawn(RT.server.cmd, RT.server.args, {
+    cwd: RT.server.cwd,
     env: {
-      ...process.env,
+      ...RT.server.env,
       PORT: String(port),
-      LOCALTUBE_DATA: DATA_DIR,
+      LOCALTUBE_DATA: RT.dataDir,
       LOCALTUBE_NO_OPEN: '1',
       CLIPPER_LIBRARY_DIR: paths.library,
       PIPELINE_URL: pipeBase,
@@ -234,8 +233,59 @@ async function confirmQuit() {
   }
 }
 
+/** Installed app: the folder for recordings, clips and Shorts (asked once, then remembered). */
+function askWorkDir() {
+  const suggested = path.join(app.getPath('documents'), 'Spikecut');
+  const r = dialog.showMessageBoxSync({
+    type: 'question',
+    buttons: [`Use ${suggested}`, 'Choose a folder…'],
+    defaultId: 0,
+    cancelId: 0,
+    title: 'Spikecut',
+    message: 'Where should Spikecut keep recordings, clips and Shorts?',
+    detail: 'Recordings are large, so pick a drive with plenty of free space. If you have used Spikecut before, choose that folder to keep your work.',
+  });
+  if (r === 1) {
+    const picked = dialog.showOpenDialogSync({ title: 'Spikecut work folder', defaultPath: suggested, properties: ['openDirectory', 'createDirectory'] });
+    if (picked && picked[0]) return picked[0];
+  }
+  return suggested;
+}
+
+/** The work folder, or null when the user gives up after a folder that can't be used. */
+function chooseWorkDir() {
+  const userData = app.getPath('userData');
+  for (;;) {
+    try {
+      return workfolder.setUp({ userData, override: process.env.SPIKECUT_WORK_DIR, resourcesPath: process.resourcesPath, ask: askWorkDir });
+    } catch (e) {
+      const r = dialog.showMessageBoxSync({
+        type: 'error',
+        buttons: ['Choose another folder', 'Quit'],
+        defaultId: 0,
+        cancelId: 1,
+        title: 'Spikecut',
+        message: String(e.message || e),
+        detail: 'If it is on a drive that is not connected, connect it and start Spikecut again.',
+      });
+      if (r === 1 || process.env.SPIKECUT_WORK_DIR) return null;
+      workfolder.forget(userData);
+    }
+  }
+}
+
 async function boot() {
   Menu.setApplicationMenu(null);
+  const workDir = app.isPackaged ? chooseWorkDir() : undefined;
+  if (app.isPackaged && !workDir) return app.exit(0);
+  RT = resolveRuntime({
+    isPackaged: app.isPackaged,
+    resourcesPath: process.resourcesPath,
+    appDir: APP_DIR,
+    env: process.env,
+    home: app.getPath('home'),
+    workDir,
+  });
   createWindow();
   try {
     await startPipelineApi();
