@@ -1,6 +1,7 @@
 import type { Db } from './db/db.js';
 import { startAiWorker } from './ai/aiWorker.js';
 import type { AiProvider } from './ai/provider.js';
+import { startLibrarySync } from './library/library.js';
 import { recover } from './queue/recovery.js';
 import { startUploadWorker } from './queue/uploadWorker.js';
 import { startScanLoop } from './scan/scanLoop.js';
@@ -49,11 +50,14 @@ export async function startRuntime(deps: RuntimeDeps): Promise<{ stop(): Promise
     },
   });
 
+  const librarySync = startLibrarySync(db, deps.statusIntervalMs ? Math.max(1000, deps.statusIntervalMs) : 30_000);
+
   let stopping: Promise<void> | null = null;
   return {
     stop: () =>
       (stopping ??= (async () => {
         scan.stop();
+        librarySync.stop();
         monitor.stop();
         await upload.stop();
         await ai.stop();

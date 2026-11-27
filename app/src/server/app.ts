@@ -20,6 +20,7 @@ import { registerQueueRoutes } from './routes/queue.js';
 import { registerHistoryRoutes } from './routes/history.js';
 import { registerDashboardRoutes } from './routes/dashboard.js';
 import { registerVideoRoutes } from './routes/videos.js';
+import { registerPipelineRoutes } from './routes/pipeline.js';
 import { createAccountAuth, type AccountAuth } from './youtube/accounts.js';
 import { GOOGLE_ENDPOINTS, type GoogleEndpoints } from './youtube/oauth.js';
 
@@ -118,6 +119,7 @@ export function buildApp(init: AppInit): FastifyInstance {
   registerHistoryRoutes(app);
   registerDashboardRoutes(app);
   registerVideoRoutes(app);
+  registerPipelineRoutes(app);
 
   // The built React UI (npm run build:ui). Absent in tests and during API-only development.
   const uiDir = path.resolve(process.cwd(), 'dist', 'ui');

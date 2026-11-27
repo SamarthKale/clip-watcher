@@ -26,7 +26,7 @@ const EDITABLE: (keyof FolderSettings)[] = [
   'recursive_scan', 'monitor_enabled', 'ai_profile_id', 'auto_publish', 'default_visibility', 'default_category_id', 'default_playlist_id', 'display_name',
 ];
 
-function normalize(p: string): string {
+export function normalizeFolderPath(p: string): string {
   const n = path.win32.normalize(p);
   return n.length > 3 ? n.replace(/[\\/]+$/, '') : n;
 }
@@ -36,7 +36,7 @@ function getFolder(db: Db, id: number): Folder {
 }
 
 export function addFolder(db: Db, input: { path: string; recursive?: boolean }): Folder {
-  const p = normalize(input.path);
+  const p = normalizeFolderPath(input.path);
   const existing = db.prepare('SELECT * FROM folders WHERE path = ?').get(p) as Folder | undefined;
   if (existing) {
     if (!existing.is_enabled) db.prepare("UPDATE folders SET is_enabled = 1, updated_at = datetime('now') WHERE id = ?").run(existing.id);

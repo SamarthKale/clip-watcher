@@ -416,6 +416,54 @@ class Handler(BaseHTTPRequestHandler):
         except (ConnectionError, OSError):
             pass
 
+    def _manage(self, url: str, body: dict) -> dict:
+        """VOD links, the watch list and the storage manager. Errors come back as {ok: false, message}."""
+        from . import cleanup, vod
+        cfg = self.dash.cfg
+        db = self.dash.db()
+        try:
+            if url == "/api/vod/add":
+                text = str(body.get("url", ""))
+                links = [t for t in re.split(r"[\s,]+", text) if t]
+                if not links:
+                    return {"ok": False, "message": "Paste at least one link."}
+                out = []
+                for link in links[:20]:
+                    try:
+                        jid, new = vod.add_job(db, link)
+                        out.append({"url": link, "job": jid, "queued": new})
+                    except vod.VodError as e:
+                        out.append({"url": link, "error": str(e)})
+                good = sum(1 for o in out if "error" not in o)
+                return {"ok": good > 0, "results": out,
+                        "message": f"{good} link(s) queued" if good else out[0].get("error", "No link could be queued")}
+            if url == "/api/vod/retry":
+                n = db.conn.execute("UPDATE vod_jobs SET status='pending', attempts=0, error=NULL, updated=? "
+                                    "WHERE id=? AND status='failed'", (time.time(), int(body.get("id", 0)))).rowcount
+                return {"ok": bool(n), "message": "queued again" if n else "only failed links can be retried"}
+            if url == "/api/watch/add":
+                vod.add_watch(db, str(body.get("platform", "")), str(body.get("channel", "")),
+                              str(body.get("keyword", "")), int(body.get("hours") or 36))
+                return {"ok": True, "message": "watching"}
+            if url == "/api/watch/remove":
+                n = vod.remove_watch(db, str(body.get("platform", "")), str(body.get("channel", "")))
+                return {"ok": bool(n), "message": "removed" if n else "not on the list"}
+            if url == "/api/watch/check":
+                return {"ok": True, **vod.watch_pass(cfg, db)}
+            if url == "/api/storage/plan":
+                return {"ok": True, **cleanup.plan(cfg, db, float(body.get("older_than_days", 30)),
+                                                   body.get("kinds") or None)}
+            if url == "/api/storage/run":
+                ids = [str(i) for i in body.get("ids", [])][:500]
+                return {"ok": True, **cleanup.run(cfg, db, ids, [str(i) for i in body.get("override_ids", [])])}
+        except vod.VodError as e:
+            return {"ok": False, "message": str(e)}
+        except (ValueError, TypeError) as e:
+            return {"ok": False, "message": f"bad request: {e}"}
+        finally:
+            db.close()
+        return {"ok": False, "message": "unknown request"}
+
     # -- routes
     def do_GET(self):  # noqa: N802
         if not self._host_ok():
@@ -434,6 +482,29 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(self.dash.state(ch))
             if url.path == "/api/chat":
                 return self._json(self.dash.chat(ch))
+            if url.path == "/api/health":
+                return self._json({"ok": True, "service": "clipwatcher"})
+            if url.path == "/api/paths":
+                from .library import library_root
+                from .storage import edited_root
+                return self._json({"root": str(self.dash.cfg.root), "data": str(self.dash.cfg.data_dir),
+                                   "library": str(library_root(self.dash.cfg)),
+                                   "edited": str(edited_root(self.dash.cfg))})
+            if url.path in ("/api/vod", "/api/watch"):
+                vdb = self.dash.db()
+                try:
+                    jobs = [dict(r) for r in vdb.conn.execute("SELECT * FROM vod_jobs ORDER BY id DESC LIMIT 60")]
+                    watch = [dict(r) for r in vdb.conn.execute("SELECT * FROM watchlist ORDER BY id")]
+                finally:
+                    vdb.close()
+                return self._json({"jobs": jobs, "watch": watch})
+            if url.path == "/api/storage":
+                from . import cleanup
+                sdb = self.dash.db()
+                try:
+                    return self._json(cleanup.summary(self.dash.cfg, sdb))
+                finally:
+                    sdb.close()
             if url.path == "/api/usage":
                 from . import usage
                 udb = self.dash.db()
@@ -472,6 +543,9 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json({"ok": True, "message": self.dash.runner.start(ch), "channel": ch})
             if url == "/api/stop":
                 return self._json({"ok": True, "message": self.dash.runner.stop()})
+            if url in ("/api/vod/add", "/api/vod/retry", "/api/watch/add", "/api/watch/remove", "/api/watch/check",
+                       "/api/storage/plan", "/api/storage/run"):
+                return self._json(self._manage(url, body))
             if url in ("/api/skip", "/api/retry"):
                 event_id = str(body.get("event_id", ""))
                 if not re.fullmatch(r"[A-Za-z0-9_.-]+", event_id):

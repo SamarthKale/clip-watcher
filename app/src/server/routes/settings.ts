@@ -2,6 +2,7 @@ import { z } from 'zod';
 import type { FastifyInstance } from 'fastify';
 import { getSettings, setSettings } from '../settings.js';
 import { AiError } from '../ai/provider.js';
+import { applyPublishMode } from '../library/library.js';
 
 export const GEMINI_SECRET = 'geminiApiKey';
 
@@ -18,6 +19,7 @@ export function registerSettingsRoutes(app: FastifyInstance): void {
     } catch {
       return reply.code(400).send({ error: 'invalid settings' });
     }
+    applyPublishMode(db); // publish mode and visibility apply to the library folder at once
     return view();
   });
 

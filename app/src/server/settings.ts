@@ -19,6 +19,12 @@ export const SettingsSchema = z.object({
   enhanceImports: z.boolean().default(true),
   /** Persisted so a pause survives a restart. */
   queuePaused: z.boolean().default(false),
+  /** review = every Short waits for your approval; auto = Shorts in the library upload by themselves. */
+  publishMode: z.enum(['review', 'auto']).default('review'),
+  /** Visibility used for Shorts from the library (review mode uses it when you approve). */
+  autoVisibility: z.enum(['private', 'unlisted', 'public']).default('private'),
+  /** The Clip Watcher Shorts library, registered as a watched folder automatically. */
+  libraryDir: z.string().default(''),
 });
 export type Settings = z.infer<typeof SettingsSchema>;
 export const SettingsPatchSchema = SettingsSchema.partial().strict();

@@ -7,6 +7,7 @@ import { openDb } from './db/db.js';
 import { dataDir, PORT } from './config.js';
 import { log, setLogDir } from './log.js';
 import { startRuntime } from './runtime.js';
+import { ensureLibraryFolder } from './library/library.js';
 
 async function main() {
   const dir = dataDir();
@@ -20,6 +21,10 @@ async function main() {
   // Test hook for the browser smoke test only: a fixed folder instead of the native Windows dialog.
   const testPick = process.env.LOCALTUBE_TEST_PICK_DIR;
   const app = buildApp({ db, token, sessionSecret, ...(testPick ? { pickFolder: async () => testPick } : {}) });
+
+  // The Clip Watcher Shorts library is watched automatically: no folder picking.
+  const libraryDir = process.env.CLIPPER_LIBRARY_DIR;
+  if (libraryDir) ensureLibraryFolder(db, libraryDir);
 
   const runtime = await startRuntime({
     db,
