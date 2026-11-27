@@ -1,4 +1,8 @@
-# Clip Watcher
+# Spikecut (internally: Clip Watcher)
+
+The product is called **Spikecut** everywhere a user sees it (window, app icon, UI, docs). Internal names
+stay as they were so existing data keeps working: the Python package `clipwatcher`, the `localtube` names
+in `app/`, the data folders, and the Electron user-data folder.
 
 Records a Twitch channel and finds chat spikes. For each spike it cuts generous raw footage and
 transcribes it, then hands it to Claude Code to edit into a vertical YouTube Short.

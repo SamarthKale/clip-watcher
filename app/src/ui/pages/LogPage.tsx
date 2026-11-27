@@ -47,7 +47,7 @@ export function LogPage() {
       <div
         ref={box}
         onWheel={() => { const el = box.current; if (el && follow && el.scrollTop + el.clientHeight < el.scrollHeight - 40) setFollow(false); }}
-        className="h-[calc(100vh-17rem)] min-h-72 overflow-auto rounded-xl bg-black/45 p-4 font-mono text-[12.5px] leading-6 text-zinc-200"
+        className="h-[calc(100vh-17rem)] min-h-72 overflow-auto rounded-xl bg-zinc-900/90 p-4 font-mono ring-1 ring-black/5 text-[12.5px] leading-6 text-zinc-200"
         aria-label="Pipeline log"
       >
         {shown.length === 0 && <div className="text-zinc-500">{offline ? 'The pipeline is not running.' : 'No log lines yet. Start watching a channel to see the pipeline work.'}</div>}

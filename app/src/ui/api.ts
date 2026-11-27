@@ -27,7 +27,7 @@ async function request(method: string, url: string, body?: unknown): Promise<Res
   });
   if (!res.ok) {
     let msg = res.status === 401
-      ? 'Not signed in to LocalTube. Open it with the link printed when the app starts (or run npm start again).'
+      ? 'Not signed in to Spikecut. Restart the app (or open the link printed when the server starts).'
       : `Request failed (${res.status})`;
     try {
       const j = (await res.json()) as { error?: string };

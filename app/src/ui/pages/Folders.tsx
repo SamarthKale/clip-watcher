@@ -37,7 +37,7 @@ export function Folders() {
         <Button variant="primary" onClick={add}>Add folder</Button>
       </PageHeader>
       <ErrorBanner error={error ?? folders.error} />
-      <p className="mb-4 text-sm text-zinc-500">LocalTube only looks inside folders you add here. A folder is a source: scanning finds videos, and publishing follows each folder's own settings. Removing a folder never deletes your files.</p>
+      <p className="mb-4 text-sm text-zinc-500">Spikecut only looks inside folders you add here. A folder is a source: scanning finds videos, and publishing follows each folder's own settings. Removing a folder never deletes your files.</p>
       <div className="mb-5 flex gap-2">
         <input className={inputCls} placeholder="Or type a folder path, e.g. D:\Shorts" aria-label="Folder path" value={manual} onChange={(e) => setManual(e.target.value)} />
         <Button onClick={addManual} disabled={!manual.trim()}>Add path</Button>

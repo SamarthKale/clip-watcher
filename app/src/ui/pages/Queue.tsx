@@ -80,11 +80,11 @@ export function Queue() {
         <div className="fixed inset-0 z-20 grid place-items-center bg-black/40" onClick={() => setResolving(null)}>
           <div role="dialog" aria-label="Resolve unknown upload" className="w-full max-w-lg space-y-3 rounded-lg bg-white p-5 dark:bg-zinc-900" onClick={(e) => e.stopPropagation()}>
             <h2 className="text-lg font-semibold">Did this video reach YouTube?</h2>
-            <p className="text-sm text-zinc-600 dark:text-zinc-400">LocalTube could not confirm the result of uploading <b>{resolving.filename}</b>. Check your channel in YouTube Studio, then tell LocalTube what you found. It will not upload again until you decide.</p>
+            <p className="text-sm text-zinc-600 dark:text-zinc-400">Spikecut could not confirm the result of uploading <b>{resolving.filename}</b>. Check your channel in YouTube Studio, then tell Spikecut what you found. It will not upload again until you decide.</p>
             <input className={inputCls} placeholder="YouTube video ID (11 characters), if you found it" value={foundId} onChange={(e) => setFoundId(e.target.value.trim())} aria-label="YouTube video id" />
             <div className="flex flex-wrap gap-2">
               <Button variant="primary" disabled={!/^[A-Za-z0-9_-]{11}$/.test(foundId)} onClick={() => act(async () => { await api.post(`/api/jobs/${resolving.id}/resolve`, { action: 'found', videoId: foundId }); setResolving(null); })}>I found it</Button>
-              <Button variant="danger" onClick={() => { if (confirm('Only choose this if the video is definitely NOT on your channel. LocalTube will upload it again and may create a duplicate otherwise.')) void act(async () => { await api.post(`/api/jobs/${resolving.id}/resolve`, { action: 'not_uploaded' }); setResolving(null); }); }}>It is not there, upload again</Button>
+              <Button variant="danger" onClick={() => { if (confirm('Only choose this if the video is definitely NOT on your channel. Spikecut will upload it again and may create a duplicate otherwise.')) void act(async () => { await api.post(`/api/jobs/${resolving.id}/resolve`, { action: 'not_uploaded' }); setResolving(null); }); }}>It is not there, upload again</Button>
               <Button variant="ghost" onClick={() => setResolving(null)}>Close</Button>
             </div>
           </div>

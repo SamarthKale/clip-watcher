@@ -80,7 +80,7 @@ export function describeJob(j: Pick<JobRow, 'status' | 'last_error_code' | 'last
       if (j.last_error_code === 'file_changed') return 'The video file changed after it was queued. Regenerate its metadata, then press Retry to queue it again';
       if (j.last_error_code === 'file_missing') return 'The video file is missing or its drive is disconnected. Reconnect it, then press Retry';
       return `Paused${err}`;
-    case 'UPLOAD_OUTCOME_UNKNOWN': return `Needs your attention: LocalTube cannot tell whether YouTube received this video. Check your channel in YouTube Studio, then choose "I found it" or "Not uploaded"${err}`;
+    case 'UPLOAD_OUTCOME_UNKNOWN': return `Needs your attention: Spikecut cannot tell whether YouTube received this video. Check your channel in YouTube Studio, then choose "I found it" or "Not uploaded"${err}`;
     case 'UPLOAD_COMPLETE': return 'Uploaded to YouTube';
     case 'FAILED_PERMANENTLY': return `Failed${err}`;
     case 'CANCELLED': return 'Cancelled';

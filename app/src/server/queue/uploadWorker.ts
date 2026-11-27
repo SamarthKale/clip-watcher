@@ -230,7 +230,7 @@ export function startUploadWorker(deps: UploadWorkerDeps, concurrency: number | 
       if (q.state === 'gone') {
         // bytes_sent only advances on a server reply, so it cannot prove nothing was sent: use the explicit flag.
         if (job.data_started || job.bytes_sent > 0) {
-          markUnknown(jobId, 'The saved upload session no longer exists, so LocalTube cannot tell whether YouTube received the video');
+          markUnknown(jobId, 'The saved upload session no longer exists, so Spikecut cannot tell whether YouTube received the video');
           return;
         }
         uri = null; // nothing was ever sent: starting a fresh session cannot duplicate

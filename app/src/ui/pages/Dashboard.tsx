@@ -47,7 +47,7 @@ export function Dashboard() {
 
   return (
     <div>
-      <PageHeader title="Dashboard" subtitle="Everything LocalTube is doing, from finding a clip to it going live." />
+      <PageHeader title="Dashboard" subtitle="Everything Spikecut is doing, from finding a clip to it going live." />
       <ErrorBanner error={err ?? error} />
 
       {data?.paused && (

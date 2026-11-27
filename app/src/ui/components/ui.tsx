@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ButtonHTMLAttributes, type ReactNode } from 'react';
+import { animate, motion, useReducedMotion, type Variants } from 'motion/react';
 import { errorText } from '../api';
 
 /* ---------- icons ---------- */
@@ -23,6 +24,17 @@ const PATHS: Record<string, string> = {
   file: 'M7 3h7l5 5v13H7zM14 3v5h5',
   undo: 'M9 14L4 9l5-5M4 9h10a6 6 0 0 1 0 12h-3',
   info: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM12 11v5M12 8h.01',
+  compass: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM15.5 8.5l-2 5-5 2 2-5z',
+  arrowRight: 'M5 12h14M13 6l6 6-6 6',
+  arrowLeft: 'M19 12H5M11 6l-6 6 6 6',
+  chart: 'M4 19h16M7 16V10M12 16V6M17 16v-4',
+  scissors: 'M6 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM6 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM8.1 7.9L20 20M8.1 16.1L20 4',
+  shield: 'M12 3l8 3v6c0 4.5-3.4 8.3-8 9-4.6-.7-8-4.5-8-9V6z',
+  wallet: 'M3 7a2 2 0 0 1 2-2h13v4M3 7v10a2 2 0 0 0 2 2h15V9H5a2 2 0 0 1-2-2zM16 14h.01',
+  database: 'M12 3c4.4 0 8 1.3 8 3s-3.6 3-8 3-8-1.3-8-3 3.6-3 8-3zM4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3',
+  terminal: 'M4 5h16v14H4zM8 10l3 2-3 2M13 15h3',
+  youtube: 'M3 8.5A3.5 3.5 0 0 1 6.5 5h11A3.5 3.5 0 0 1 21 8.5v7a3.5 3.5 0 0 1-3.5 3.5h-11A3.5 3.5 0 0 1 3 15.5zM10 9.5v5l4.5-2.5z',
+  link: 'M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1',
 };
 
 export function Icon({ name, className = 'h-4 w-4' }: { name: keyof typeof PATHS | string; className?: string }) {
@@ -37,7 +49,7 @@ export function Icon({ name, className = 'h-4 w-4' }: { name: keyof typeof PATHS
 export function Button({ variant = 'default', className = '', ...p }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'default' | 'primary' | 'danger' | 'ghost' | 'soft' }) {
   const styles = {
     default: 'border border-zinc-300 bg-white text-zinc-800 shadow-sm hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800',
-    primary: 'bg-indigo-600 text-white shadow-sm hover:bg-indigo-500',
+    primary: 'btn-primary text-white',
     soft: 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100 dark:bg-indigo-950 dark:text-indigo-300 dark:hover:bg-indigo-900',
     danger: 'border border-red-300 bg-white text-red-700 hover:bg-red-50 dark:border-red-800 dark:bg-transparent dark:text-red-300 dark:hover:bg-red-950',
     ghost: 'text-zinc-600 hover:bg-zinc-200/70 dark:text-zinc-300 dark:hover:bg-zinc-800',
@@ -45,25 +57,65 @@ export function Button({ variant = 'default', className = '', ...p }: ButtonHTML
   return (
     <button
       {...p}
-      className={`inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium transition focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50 ${styles} ${className}`}
+      className={`inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-1.5 text-sm font-medium transition duration-150 active:scale-[0.97] focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-50 ${styles} ${className}`}
     />
   );
 }
 
-export function Card({ children, className = '' }: { children: ReactNode; className?: string }) {
-  return <div className={`rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 ${className}`}>{children}</div>;
+/**
+ * Entrance animation shared by page content: the page wrapper in App staggers these, so cards and
+ * headers rise in one after another. Outside a page (dialogs) they simply show.
+ */
+export const rise: Variants = {
+  hidden: { opacity: 0, y: 12 },
+  show: { opacity: 1, y: 0, transition: { type: 'spring', stiffness: 260, damping: 28, mass: 0.8 } },
+};
+
+/** A panel. `lift` makes it rise slightly under the pointer (for things you click or play). */
+export function Card({ children, className = '', lift = false }: { children: ReactNode; className?: string; lift?: boolean }) {
+  return (
+    <motion.div
+      variants={rise}
+      whileHover={lift ? { y: -4, transition: { type: 'spring', stiffness: 400, damping: 26 } } : undefined}
+      className={`rounded-xl border border-zinc-200 bg-white p-4 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 ${className}`}
+    >
+      {children}
+    </motion.div>
+  );
 }
 
 export function PageHeader({ title, subtitle, children }: { title: string; subtitle?: string; children?: ReactNode }) {
   return (
-    <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
+    <motion.div variants={rise} className="mb-6 flex flex-wrap items-start justify-between gap-3">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
+        <h1 className="text-[1.65rem] font-semibold leading-tight tracking-[-0.02em]">{title}</h1>
         {subtitle && <p className="mt-1 max-w-2xl text-sm text-zinc-500">{subtitle}</p>}
       </div>
       <div className="flex flex-wrap items-center gap-2">{children}</div>
-    </div>
+    </motion.div>
   );
+}
+
+/** A number that counts up to its new value (instantly when Windows asks for less motion). */
+export function AnimatedNumber({ value, format = (n) => String(Math.round(n)), className = '' }: { value: number; format?: (n: number) => string; className?: string }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const from = useRef(0);
+  const fmt = useRef(format);
+  fmt.current = format;
+  const reduce = useReducedMotion();
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    if (reduce || from.current === value) { el.textContent = fmt.current(value); from.current = value; return; }
+    const c = animate(from.current, value, { duration: 0.9, ease: [0.16, 1, 0.3, 1], onUpdate: (v) => { from.current = v; el.textContent = fmt.current(v); } });
+    return () => c.stop();
+  }, [value, reduce]);
+  return <span ref={ref} className={`tabular ${className}`}>{format(reduce ? value : from.current)}</span>;
+}
+
+/** Coral dot with a ripple, for anything live. */
+export function LiveDot({ className = 'text-coral-500' }: { className?: string }) {
+  return <span className={`live-dot ${className}`} aria-hidden="true" />;
 }
 
 const TONE: Record<string, string> = {
@@ -157,11 +209,11 @@ export function ErrorBanner({ error }: { error: string | null }) {
 
 export function EmptyState({ icon, title, children }: { icon: string; title: string; children?: ReactNode }) {
   return (
-    <div className="flex flex-col items-center rounded-xl border border-dashed border-zinc-300 px-6 py-10 text-center dark:border-zinc-700">
-      <div className="mb-3 grid h-11 w-11 place-items-center rounded-full bg-zinc-100 text-zinc-500 dark:bg-zinc-800"><Icon name={icon} className="h-5 w-5" /></div>
+    <motion.div variants={rise} className="flex flex-col items-center rounded-xl border border-dashed border-zinc-300 px-6 py-10 text-center dark:border-zinc-700">
+      <div className="mb-3 grid h-11 w-11 place-items-center rounded-2xl bg-indigo-50 text-indigo-600 dark:bg-indigo-950 dark:text-indigo-300"><Icon name={icon} className="h-5 w-5" /></div>
       <div className="font-medium">{title}</div>
       {children && <div className="mt-1 max-w-md text-sm text-zinc-500">{children}</div>}
-    </div>
+    </motion.div>
   );
 }
 

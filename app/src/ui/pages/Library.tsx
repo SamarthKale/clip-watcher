@@ -71,7 +71,7 @@ export function Library() {
 
   return (
     <div>
-      <PageHeader title="Video Library" subtitle="Every video LocalTube has found, with its title, description and upload state. Click a filename to edit it.">
+      <PageHeader title="Video Library" subtitle="Every video Spikecut has found, with its title, description and upload state. Click a filename to edit it.">
         <ImportJsonButton folderId={importFolder} enhance={geminiReady && (settings.data?.enhanceImports ?? false)} onDone={(m) => { setNote(m); list.reload(); }} onError={setError} />
       </PageHeader>
       {importFolder === null && folders.data && folders.data.length > 1 && <p className="mb-2 text-xs text-zinc-500">To import a metadata JSON here, first choose a folder in the folder filter.</p>}

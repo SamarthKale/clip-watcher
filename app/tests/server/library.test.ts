@@ -34,7 +34,7 @@ function addVideo(folderId: number, file: string, cols: Record<string, string> =
 describe('library folder', () => {
   it('is registered once, recursive, monitored, and starts in review mode (private)', () => {
     const f = ensureLibraryFolder(db, root);
-    expect(f).toMatchObject({ recursive_scan: 1, monitor_enabled: 1, auto_publish: 0, default_visibility: 'private', display_name: 'Clip Watcher Shorts' });
+    expect(f).toMatchObject({ recursive_scan: 1, monitor_enabled: 1, auto_publish: 0, default_visibility: 'private', display_name: 'Spikecut Shorts' });
     ensureLibraryFolder(db, root);
     expect(listFolders(db)).toHaveLength(1);
     expect(getSettings(db).libraryDir).toBe(root);

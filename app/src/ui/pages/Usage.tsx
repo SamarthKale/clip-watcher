@@ -1,11 +1,12 @@
-import { Card, EmptyState, Notice, PageHeader } from '../components/ui';
+import { motion } from 'motion/react';
+import { AnimatedNumber, Card, EmptyState, Notice, PageHeader } from '../components/ui';
 import { fmtTokens, fmtUsd, pipe, usePipelinePoll, type UsageSummary } from '../pipeline';
 
-function Stat({ label, value, sub }: { label: string; value: string; sub?: string }) {
+function Stat({ label, value, format, sub }: { label: string; value: number | null; format: (n: number) => string; sub?: string }) {
   return (
-    <Card>
+    <Card lift>
       <div className="text-sm text-zinc-500">{label}</div>
-      <div className="mt-1 text-3xl font-bold leading-none">{value}</div>
+      <div className="font-display mt-1 text-3xl font-semibold leading-none tracking-[-0.02em]">{value == null ? '–' : <AnimatedNumber value={value} format={format} />}</div>
       {sub && <div className="mt-1.5 text-xs text-zinc-500">{sub}</div>}
     </Card>
   );
@@ -22,10 +23,10 @@ export function Usage() {
       {d && (
         <>
           <div className="mb-4 grid grid-cols-2 gap-4 lg:grid-cols-4">
-            <Stat label="Total (list price)" value={fmtUsd(d.total.cost_usd)} sub={`${d.total.attempts} attempts on ${d.total.videos} videos`} />
-            <Stat label="Average per finished Short" value={fmtUsd(d.total.avg_per_finished_usd)} sub={`${d.total.finished} finished`} />
-            <Stat label="Spent on failed attempts" value={fmtUsd(d.total.wasted_usd)} sub="retries, rejects and invalid edits" />
-            <Stat label="Tokens" value={fmtTokens(d.total.cache_read + d.total.cache_write + d.total.input_tokens)} sub={`${fmtTokens(d.total.output_tokens)} written by Claude`} />
+            <Stat label="Total (list price)" value={d.total.cost_usd} format={fmtUsd} sub={`${d.total.attempts} attempts on ${d.total.videos} videos`} />
+            <Stat label="Average per finished Short" value={d.total.avg_per_finished_usd} format={fmtUsd} sub={`${d.total.finished} finished`} />
+            <Stat label="Spent on failed attempts" value={d.total.wasted_usd} format={fmtUsd} sub="retries, rejects and invalid edits" />
+            <Stat label="Tokens" value={d.total.cache_read + d.total.cache_write + d.total.input_tokens} format={(n) => fmtTokens(Math.round(n))} sub={`${fmtTokens(d.total.output_tokens)} written by Claude`} />
           </div>
           <p className="mb-4 text-xs text-zinc-500">{d.total.note}</p>
 
@@ -37,7 +38,7 @@ export function Usage() {
                   {d.per_day.map((x) => (
                     <div key={x.date} className="flex flex-1 flex-col items-center gap-1" title={`${x.date}: ${fmtUsd(x.cost_usd)}, ${x.attempts} attempts`}>
                       <div className="text-[10px] text-zinc-500">{fmtUsd(x.cost_usd)}</div>
-                      <div className="w-full rounded-t bg-indigo-400" style={{ height: `${Math.max(3, (x.cost_usd / maxDay) * 100)}px` }} />
+                      <motion.div className="w-full rounded-t bg-gradient-to-t from-indigo-500 to-indigo-400" initial={{ height: 0 }} animate={{ height: Math.max(3, (x.cost_usd / maxDay) * 100) }} transition={{ type: 'spring', stiffness: 160, damping: 22 }} />
                       <div className="text-[10px] text-zinc-500">{x.date.slice(5)}</div>
                     </div>
                   ))}

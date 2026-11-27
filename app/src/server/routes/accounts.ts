@@ -6,7 +6,7 @@ import { log } from '../log.js';
 
 export const CLIENT_SECRET_NAME = 'googleClientSecret';
 const REVOKE_GUIDANCE =
-  'LocalTube has forgotten this channel. To fully remove its access, open https://myaccount.google.com/permissions , choose LocalTube, and select "Remove access".';
+  'Spikecut has forgotten this channel. To fully remove its access, open https://myaccount.google.com/permissions , choose the app name you gave your Google OAuth client, and select "Remove access".';
 
 export function registerAccountRoutes(app: FastifyInstance): void {
   const { db, secrets, auth } = app.deps;

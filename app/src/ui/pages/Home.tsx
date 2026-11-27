@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
+import { motion } from 'motion/react';
 import { errorText } from '../api';
-import { Button, Card, Icon, Notice, PageHeader } from '../components/ui';
+import { AnimatedNumber, Button, Card, Icon, LiveDot, Notice, PageHeader } from '../components/ui';
 import { fmtClock, pipe, usePipelinePoll, type ChatState, type LogLine, type PipelineState, type SetupStatus } from '../pipeline';
 import { SpikeTable } from './Spikes';
 
@@ -10,22 +11,22 @@ function Chip({ tone, pulse, children }: { tone: 'ok' | 'wait' | 'live' | 'bad';
   const t = {
     ok: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-300',
     wait: 'bg-zinc-500/15 text-zinc-600 dark:text-zinc-300',
-    live: 'bg-violet-500/15 text-violet-600 dark:text-violet-300',
+    live: 'bg-coral-500/12 text-coral-600 dark:text-coral-400',
     bad: 'bg-red-500/15 text-red-600 dark:text-red-300',
   }[tone];
   return (
-    <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-semibold ${t}`}>
-      <span className={`h-2 w-2 rounded-full bg-current ${pulse ? 'animate-pulse' : ''}`} />
+    <span className={`inline-flex items-center gap-2 rounded-full px-2.5 py-1 text-xs font-semibold ${t}`}>
+      {pulse ? <LiveDot className="" /> : <span className="h-2 w-2 rounded-full bg-current opacity-70" />}
       {children}
     </span>
   );
 }
 
-function Stat({ icon, value, label }: { icon: string; value: React.ReactNode; label: string }) {
+function Stat({ icon, value, label, accent }: { icon: string; value: React.ReactNode; label: string; accent?: boolean }) {
   return (
-    <Card className="flex flex-col gap-1">
-      <span className="mb-2 grid h-9 w-9 place-items-center rounded-xl bg-indigo-500/15 text-indigo-600 dark:text-indigo-300"><Icon name={icon} className="h-4 w-4" /></span>
-      <div className="text-3xl font-bold leading-none">{value}</div>
+    <Card lift className="group flex flex-col gap-1">
+      <span className={`mb-2 grid h-9 w-9 place-items-center rounded-xl transition-transform duration-300 group-hover:scale-110 ${accent ? 'bg-coral-500/12 text-coral-600' : 'bg-indigo-50 text-indigo-600 dark:bg-indigo-950 dark:text-indigo-300'}`}><Icon name={icon} className="h-4 w-4" /></span>
+      <div className="font-display text-3xl font-semibold leading-none tracking-[-0.02em]">{typeof value === 'number' ? <AnimatedNumber value={value} /> : value}</div>
       <div className="text-sm text-zinc-500">{label}</div>
     </Card>
   );
@@ -40,9 +41,16 @@ function ChatChart({ chat }: { chat: ChatState }) {
   return (
     <svg viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" className="mt-3 h-36 w-full" role="img" aria-label="Chat messages per 10 seconds, last 10 minutes">
       {b.map((v, i) => (
-        <rect key={i} x={4 + i * bw + 1} y={y(v)} width={Math.max(1, bw - 2)} height={H - y(v)} rx={2} className="fill-indigo-400" opacity={chat.threshold > 0 && v >= chat.threshold ? 1 : 0.65} />
+        <motion.rect
+          key={i} x={4 + i * bw + 1} width={Math.max(1, bw - 2)} rx={2}
+          className={chat.threshold > 0 && v >= chat.threshold ? 'fill-coral-500' : 'fill-indigo-400'}
+          opacity={chat.threshold > 0 && v >= chat.threshold ? 1 : 0.7}
+          initial={{ y: H, height: 0 }}
+          animate={{ y: y(v), height: H - y(v) }}
+          transition={{ type: 'spring', stiffness: 170, damping: 24, delay: Math.min(i * 0.008, 0.4) }}
+        />
       ))}
-      {chat.threshold > 0 && <line x1={0} x2={W} y1={y(chat.threshold)} y2={y(chat.threshold)} stroke="#a78bfa" strokeWidth={1.5} strokeDasharray="5 4" vectorEffect="non-scaling-stroke" />}
+      {chat.threshold > 0 && <line x1={0} x2={W} y1={y(chat.threshold)} y2={y(chat.threshold)} stroke="#ff5a5f" strokeOpacity={0.7} strokeWidth={1.5} strokeDasharray="5 4" vectorEffect="non-scaling-stroke" />}
     </svg>
   );
 }
@@ -57,7 +65,7 @@ function ActivityChart({ data }: { data: PipelineState['activity'] }) {
       {data.map((d, i) => (
         <g key={d.date}>
           <rect x={pad + i * bw + bw * 0.12} y={H - 24 - h(d.spikes)} width={bw * 0.36} height={h(d.spikes)} rx={2} className="fill-zinc-400/50" />
-          <rect x={pad + i * bw + bw * 0.5} y={H - 24 - h(d.shorts)} width={bw * 0.36} height={h(d.shorts)} rx={2} className="fill-indigo-400" />
+          <rect x={pad + i * bw + bw * 0.5} y={H - 24 - h(d.shorts)} width={bw * 0.36} height={h(d.shorts)} rx={2} className="fill-indigo-500" />
           {(i % 2 === 1 || i === data.length - 1) && <text x={pad + i * bw + bw / 2} y={H - 8} textAnchor="middle" fontSize="10" className="fill-zinc-500">{i === data.length - 1 ? 'Today' : d.date.slice(5)}</text>}
         </g>
       ))}
@@ -86,7 +94,7 @@ export function MiniLog() {
   }, []);
   useEffect(() => { if (box.current) box.current.scrollTop = box.current.scrollHeight; }, [lines]);
   return (
-    <div ref={box} className="mt-2 h-52 overflow-auto rounded-lg bg-black/40 p-3 font-mono text-xs leading-5 text-zinc-200">
+    <div ref={box} className="mt-2 h-52 overflow-auto rounded-lg bg-zinc-900/90 p-3 font-mono text-xs leading-5 text-zinc-200 ring-1 ring-black/5">
       {lines.length === 0 ? <span className="text-zinc-500">No log lines yet. Start watching a channel.</span> : lines.map((l, i) => (
         <div key={i} className={l.level === 'ERROR' ? 'text-red-300' : l.level === 'WARNING' ? 'text-amber-200' : /SPIKE/.test(l.msg) ? 'text-emerald-300' : ''}>
           <span className="text-zinc-500">{l.ts.slice(11)}</span> <span className="text-amber-300">{l.stage}</span> {l.msg}
@@ -146,14 +154,15 @@ export function Home() {
       {msg && <Notice tone={msg.tone === 'error' ? 'error' : 'info'} className="mb-4">{msg.text}</Notice>}
 
       <Card className="mb-4">
+        <div className="mb-3 flex items-center gap-2 text-sm font-semibold"><Icon name="chart" className="h-4 w-4 text-indigo-600" />Watch a Twitch channel</div>
         <div className="flex flex-wrap items-center gap-3">
           <input
-            className="min-w-60 flex-1 rounded-xl border border-zinc-300 bg-white/60 px-4 py-2.5 text-sm outline-none focus:border-indigo-500 dark:border-zinc-700"
+            className="min-w-60 flex-1 rounded-xl border border-zinc-300 bg-white/70 px-4 py-2.5 text-sm outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/15 dark:border-zinc-700"
             placeholder="https://www.twitch.tv/name or just the channel name"
             value={input} onChange={(e) => setInput(e.target.value)} disabled={!!p?.owned}
             onKeyDown={(e) => { if (e.key === 'Enter') void start(); }} aria-label="Twitch channel"
           />
-          {p?.owned ? <Button variant="danger" onClick={stop} disabled={busy}>Stop</Button> : <Button variant="primary" onClick={start} disabled={busy}>Start watching</Button>}
+          {p?.owned ? <Button variant="danger" className="!px-4 !py-2.5" onClick={stop} disabled={busy}>Stop</Button> : <Button variant="primary" className="!px-4 !py-2.5" onClick={start} disabled={busy}><Icon name="play" className="h-3.5 w-3.5" />Start watching</Button>}
         </div>
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <Chip tone={p?.running ? 'ok' : 'wait'} pulse={p?.running}>{p?.running ? 'Pipeline running' : 'Pipeline off'}</Chip>
@@ -163,7 +172,7 @@ export function Home() {
       </Card>
 
       <div className="mb-4 grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <Stat icon="play" value={st?.live ? 'Live' : p?.running ? 'Waiting' : 'Offline'} label="Stream" />
+        <Stat icon="play" accent={!!st?.live} value={st?.live ? <span className="inline-flex items-center gap-2.5 text-coral-600"><LiveDot />Live</span> : p?.running ? 'Waiting' : 'Offline'} label="Stream" />
         <Stat icon="sparkles" value={st?.stats.spikes_today ?? 0} label="Spikes today" />
         <Stat icon="film" value={st?.stats.shorts_today ?? 0} label="Shorts today" />
         <Stat icon="clock" value={(st?.stats.queue.waiting ?? 0) + (st?.stats.queue.editing ?? 0)} label={st?.stats.queue.editing ? `Editing now, ${st.stats.queue.waiting} waiting` : 'In edit queue'} />
@@ -182,7 +191,7 @@ export function Home() {
           <h2 className="font-semibold">Chat feed</h2>
           <p className="mb-2 text-xs text-zinc-500">Read-only. This is what the detector sees.</p>
           <div className="flex max-h-56 flex-col gap-0.5 overflow-auto text-sm">
-            {chat.data?.messages.length ? chat.data.messages.map((m, i) => <div key={i}><b className="text-indigo-500 dark:text-indigo-300">{m.name}</b> {m.text}</div>) : <div className="py-8 text-center text-zinc-500">Chat appears when the pipeline is running.</div>}
+            {chat.data?.messages.length ? chat.data.messages.map((m, i) => <div key={i}><b className="text-indigo-600 dark:text-indigo-300">{m.name}</b> {m.text}</div>) : <div className="py-8 text-center text-zinc-500">Chat appears when the pipeline is running.</div>}
           </div>
         </Card>
       </div>
@@ -195,11 +204,11 @@ export function Home() {
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card>
-          <div className="flex items-center justify-between"><h2 className="font-semibold">Recent spikes</h2><a className="text-xs text-indigo-500" href="#/spikes">See all</a></div>
+          <div className="flex items-center justify-between"><h2 className="font-semibold">Recent spikes</h2><a className="text-xs font-medium text-indigo-600 hover:underline" href="#/spikes">See all</a></div>
           <SpikeTable rows={(st?.events ?? []).slice(0, 6)} compact onChanged={state.reload} />
         </Card>
         <Card>
-          <div className="flex items-center justify-between"><h2 className="font-semibold">Live log</h2><a className="text-xs text-indigo-500" href="#/log">Open</a></div>
+          <div className="flex items-center justify-between"><h2 className="font-semibold">Live log</h2><a className="text-xs font-medium text-indigo-600 hover:underline" href="#/log">Open</a></div>
           <MiniLog />
         </Card>
       </div>

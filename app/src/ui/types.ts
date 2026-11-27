@@ -91,6 +91,7 @@ export interface Settings {
   publishMode: 'review' | 'auto';
   autoVisibility: 'private' | 'unlisted' | 'public';
   libraryDir: string;
+  tourSeen?: boolean;
 }
 
 export interface HistoryRow {

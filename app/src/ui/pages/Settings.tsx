@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api, errorText } from '../api';
 import { Button, Card, ErrorBanner, Field, Icon, Notice, PageHeader, Spinner, Toggle, inputCls, selectCls, usePoll } from '../components/ui';
 import type { Settings } from '../types';
+import { openTour } from '../components/Tour';
 
 export function SettingsPage() {
   const s = usePoll(() => api.get<Settings>('/api/settings'), 60000);
@@ -20,20 +21,22 @@ export function SettingsPage() {
   };
   const num = (k: keyof Settings) => (e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, [k]: Number(e.target.value) });
   const saveSettings = () => run(async () => {
-    const { geminiKeySet: _k, googleClientId: _g, queuePaused: _q, ...rest } = form;
+    const { geminiKeySet: _k, googleClientId: _g, queuePaused: _q, tourSeen: _t, ...rest } = form;
     const next = await api.put<Settings>('/api/settings', rest);
     setForm(next);
   }, 'Settings saved');
 
   return (
     <div>
-      <PageHeader title="Settings" />
+      <PageHeader title="Settings">
+        <Button onClick={openTour}><Icon name="compass" />Take the tour</Button>
+      </PageHeader>
       <ErrorBanner error={error ?? s.error} />
       {note && <div className="mb-3 text-sm text-emerald-600" role="status">{note}</div>}
 
       <Card className="mb-4 space-y-3">
         <h2 className="font-semibold">Publishing</h2>
-        <p className="text-sm text-zinc-500">Finished Shorts appear in the Clip Watcher library automatically. Choose what happens to them next.</p>
+        <p className="text-sm text-zinc-500">Finished Shorts appear in the Spikecut library automatically. Choose what happens to them next.</p>
         <div className="grid gap-3 sm:grid-cols-2">
           <label className={`cursor-pointer rounded-xl border p-3 ${form.publishMode === 'review' ? 'border-indigo-500 bg-indigo-500/10' : 'border-zinc-300/60 dark:border-zinc-700'}`}>
             <input type="radio" name="mode" className="mr-2" checked={form.publishMode === 'review'} onChange={() => setForm({ ...form, publishMode: 'review' })} />
@@ -56,7 +59,7 @@ export function SettingsPage() {
       </Card>
 
       <details className="mb-4">
-        <summary className="cursor-pointer text-sm text-zinc-500">Advanced: Gemini (optional, not used by Clip Watcher; titles and descriptions come from Claude)</summary>
+        <summary className="cursor-pointer text-sm text-zinc-500">Advanced: Gemini (optional, not used by Spikecut; titles and descriptions come from Claude)</summary>
       <Card className="mt-3 mb-4 space-y-3">
         <h2 className="font-semibold">AI (Gemini)</h2>
         <p className="text-sm text-zinc-500">A Gemini API key from Google AI Studio is separate from any Google or Gemini subscription. The key is stored encrypted on this PC and is never shown again or sent to the browser.</p>
@@ -112,7 +115,7 @@ export function SettingsPage() {
           <Field label="Wait before a new file is processed (ms)" hint="A file must stop changing for this long, so files still being copied are skipped."><input className={inputCls} type="number" min={100} value={form.stableMs} onChange={num('stableMs')} /></Field>
           <Field label="Rescan folders every (minutes, 0 = off)"><input className={inputCls} type="number" min={0} max={1440} value={form.scanIntervalMin} onChange={num('scanIntervalMin')} /></Field>
         </div>
-        <Field label="Temporary folder for extracted frames (blank = system default)" hint="Only LocalTube's own scratch files go here. Your videos are never copied, moved or deleted."><input className={inputCls} value={form.tempDir} onChange={(e) => setForm({ ...form, tempDir: e.target.value })} /></Field>
+        <Field label="Temporary folder for extracted frames (blank = system default)" hint="Only Spikecut's own scratch files go here. Your videos are never copied, moved or deleted."><input className={inputCls} value={form.tempDir} onChange={(e) => setForm({ ...form, tempDir: e.target.value })} /></Field>
         <Button variant="primary" onClick={saveSettings}>Save settings</Button>
       </Card>
     </div>

@@ -1,6 +1,8 @@
-# Clip Watcher
+# Spikecut
 
-Clip Watcher watches a Twitch channel and finds the moments chat goes wild. It cuts raw footage
+*Catch the spike. Cut the Short.*
+
+Spikecut watches a Twitch channel and finds the moments chat goes wild. It cuts raw footage
 around each moment, transcribes it, and hands it to [Claude Code](https://claude.com/claude-code),
 which edits it into a vertical YouTube Short.
 
@@ -66,7 +68,7 @@ fixed time, use `--for 600` (seconds).
 ### Desktop app
 
 ```bash
-cd app && npm run desktop        # or double-click "Clip Watcher.cmd"
+cd app && npm run desktop        # or double-click "Spikecut.cmd"
 ```
 
 One window for everything: start or stop watching a Twitch channel, paste links of finished streams
