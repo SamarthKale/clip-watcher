@@ -1,13 +1,14 @@
-"""VOD links and the streamer watch list.
+"""Video links and the streamer watch list.
 
-Paste the link of a finished stream (Twitch, YouTube or Kick) and it becomes a recording session
-like any live one, so the normal stages (extract -> transcribe -> edit -> library) run unchanged:
+Paste any video link - a finished stream (Twitch, YouTube, Kick), an ordinary upload, a podcast
+episode, or anything else yt-dlp can download - and it becomes a recording session like a live one,
+so the normal stages (extract -> transcribe -> edit -> library) run unchanged:
 
   1. `parse_source`  recognises the link; `probe` asks yt-dlp for title, channel, duration, start time
   2. `download`      yt-dlp fetches the video (and, on YouTube, the live-chat replay)
-  3. spikes          chat replay when there is one (same 3x detector as live), otherwise the loudness
-                     detector over the whole file
-  4. events are queued exactly as live spikes are
+  3. moments         chat replay when there is one (the same detector as live); otherwise the scout
+                     (`scout.py`: whole-video transcript + Claude); the loudness detector as a fallback
+  4. the strongest `max_shorts` of them are queued exactly as live spikes are
 
 Jobs live in the `vod_jobs` table and are worked by the `vod` stage, one at a time. The watch list
 (`watchlist` table) names channels to check for new finished streams; each new VOD that passes the
@@ -34,7 +35,9 @@ from .util import STOP, utc_iso, which
 
 log = logging.getLogger("vod")
 
-PLATFORMS = ("twitch", "youtube", "kick")
+PLATFORMS = ("twitch", "youtube", "kick")  # watch-list platforms; any other link is platform "web"
+MAX_SHORTS_LIMIT = 20
+DEFAULT_MAX_SHORTS = 5
 
 
 class VodError(Exception):
@@ -43,28 +46,39 @@ class VodError(Exception):
 
 # ----------------------------------------------------------------- links
 def parse_source(url: str) -> dict:
-    """{'platform', 'video_id', 'url'} for a supported VOD link; VodError otherwise."""
+    """{'platform', 'video_id', 'url'} for a video link; VodError otherwise.
+
+    Twitch, YouTube and Kick links get their canonical form (so the same video is never queued
+    twice). Any other http(s) link is platform "web": yt-dlp decides whether it can download it,
+    and its own video ID is used once the link has been probed (video_id None until then).
+    """
     raw = (url or "").strip()
+    if re.match(r"^[a-z][a-z0-9+.-]*://", raw, re.I) and not re.match(r"^https?://", raw, re.I):
+        raise VodError("Only http(s) links can be added")
     if not re.match(r"^https?://", raw, re.I):
         raw = "https://" + raw
     u = urlparse(raw)
     host = (u.hostname or "").lower().removeprefix("www.").removeprefix("m.")
+    if "." not in host or " " in raw.strip():
+        raise VodError("That doesn't look like a link")
     parts = [p for p in u.path.split("/") if p]
     if host == "twitch.tv":
         if len(parts) >= 2 and parts[0] == "videos" and parts[1].isdigit():
             return {"platform": "twitch", "video_id": parts[1], "url": f"https://www.twitch.tv/videos/{parts[1]}"}
-        raise VodError("Twitch links must be a finished stream: twitch.tv/videos/<number>")
+        if "clip" in parts:
+            return _web(u)
+        raise VodError("That's a Twitch channel. Paste a finished stream (twitch.tv/videos/<number>) or a clip")
     if host in ("youtube.com", "youtu.be", "music.youtube.com"):
         vid = None
         if host == "youtu.be" and parts:
             vid = parts[0]
-        elif parts and parts[0] in ("live", "embed", "v") and len(parts) > 1:
+        elif parts and parts[0] in ("live", "embed", "v", "shorts") and len(parts) > 1:
             vid = parts[1]
         elif parts and parts[0] == "watch":
             vid = (parse_qs(u.query).get("v") or [None])[0]
         if vid and re.fullmatch(r"[A-Za-z0-9_-]{11}", vid):
             return {"platform": "youtube", "video_id": vid, "url": f"https://www.youtube.com/watch?v={vid}"}
-        raise VodError("YouTube links must point to one video (watch?v=..., youtu.be/..., or /live/...)")
+        raise VodError("YouTube links must point to one video (watch?v=..., youtu.be/..., /shorts/... or /live/...)")
     if host == "kick.com":
         vid = None
         if "video" in parts and parts.index("video") + 1 < len(parts):
@@ -73,8 +87,28 @@ def parse_source(url: str) -> dict:
             vid = parts[parts.index("videos") + 1]
         if vid and re.fullmatch(r"[A-Za-z0-9-]{8,64}", vid):
             return {"platform": "kick", "video_id": vid, "url": f"https://kick.com/video/{vid}"}
-        raise VodError("Kick links must be a past broadcast: kick.com/video/<id>")
-    raise VodError("Only Twitch, YouTube and Kick links are supported")
+        if "clips" in parts or "clip" in parts:
+            return _web(u)
+        raise VodError("That's a Kick channel. Paste a past broadcast: kick.com/video/<id>")
+    return _web(u)
+
+
+def _web(u) -> dict:
+    """Any other site: kept as typed (minus the #fragment); yt-dlp's own ID is used after probing."""
+    return {"platform": "web", "video_id": None, "url": u._replace(fragment="").geturl()}
+
+
+def clamp_shorts(n) -> int:
+    try:
+        n = int(n)
+    except (TypeError, ValueError):
+        return DEFAULT_MAX_SHORTS
+    return max(1, min(MAX_SHORTS_LIMIT, n))
+
+
+def safe_id(text: str) -> str:
+    """ASCII id usable in file names and session IDs."""
+    return re.sub(r"[^A-Za-z0-9_-]+", "_", text or "").strip("_")[:64] or "video"
 
 
 def channel_slug(name: str) -> str:
@@ -84,6 +118,8 @@ def channel_slug(name: str) -> str:
 
 
 def channel_link(platform: str, info: dict, slug: str) -> str:
+    if platform == "web":
+        return info.get("channel_url") or info.get("uploader_url") or info.get("webpage_url") or ""
     if platform == "twitch":
         return f"https://www.twitch.tv/{slug}"
     if platform == "kick":
@@ -114,6 +150,8 @@ def probe(cfg: Config, url: str, run=_run) -> dict:
         info = json.loads(proc.stdout)
     except ValueError as e:
         raise VodError(f"yt-dlp returned something unreadable: {e}") from e
+    if info.get("_type") in ("playlist", "multi_video"):
+        raise VodError("That link is a playlist or channel. Paste the link of one video.")
     if info.get("is_live") or info.get("live_status") == "is_live":
         raise VodError("That stream is still live. Watch it live, then add the finished VOD afterwards.")
     if not info.get("duration"):
@@ -192,41 +230,50 @@ def youtube_chat_to_log(replay: Path, out: Path, start_wall: float, duration: fl
 
 
 # ----------------------------------------------------------------- spikes
-def audio_spikes(cfg: Config, db: DB, sess, chunk: float = 600.0) -> int:
-    """Run the loudness detector over a whole VOD; returns the number of events queued."""
+def loud_candidates(cfg: Config, sess, chunk: float = 600.0) -> list[dict]:
+    """The loudness detector over a whole video, as candidate moments (strength = LU rise)."""
     a = cfg["detect"]["audio"]
     ff = cfg["extract"]["ffmpeg"]
     chat_offset = float(cfg["sync"]["chat_offset_seconds"])
-    merge = float(cfg["detect"]["merge_window_seconds"])
     det = AudioSpikeDetector(sess["channel"], a, chat_offset)
     rec = Path(sess["path"])
     total = float(sess["end_wall"]) - float(sess["start_wall"])
-    offset, added = 0.0, 0
+    offset, evs = 0.0, []
     while offset < total and not STOP.is_set():
         length = min(chunk, total - offset)
         start = max(0.0, offset - 1.0)  # momentary loudness needs a moment of warm-up
         series, _ = audio_scan(ff, rec, start=start, dur=length + (offset - start), timeout=1800)
         for sec, lufs in per_second(series, skip_before=offset - start):
-            for ev in det.feed(float(sess["start_wall"]) + start + sec, lufs):
-                added += int(db.add_event(ev.event_id, ev.channel, ev.spike_ts, ev.peak_ts, ev.stats,
-                                          merge_window=merge))
+            evs += det.feed(float(sess["start_wall"]) + start + sec, lufs)
         offset += length
-    for ev in det.flush():
-        added += int(db.add_event(ev.event_id, ev.channel, ev.spike_ts, ev.peak_ts, ev.stats, merge_window=merge))
-    return added
+    evs += det.flush()
+    return [{"event_id": e.event_id, "spike_ts": e.spike_ts, "peak_ts": e.peak_ts, "stats": e.stats,
+             "strength": float(e.stats.get("rise_lu") or 0)} for e in evs]
 
 
-def chat_spikes(cfg: Config, db: DB, channel: str, chat_log: Path) -> int:
+def chat_candidates(cfg: Config, channel: str, chat_log: Path) -> list[dict]:
+    """The chat detector over a replay, as candidate moments (strength = peak ratio x size)."""
+    return [{"event_id": e.event_id, "spike_ts": e.spike_ts, "peak_ts": e.peak_ts, "stats": e.stats,
+             "strength": float(e.stats.get("peak_ratio") or 0) * float(e.stats.get("peak_count") or 1)}
+            for e in detect_file(chat_log, channel, cfg["detect"])]
+
+
+def cap(candidates: list[dict], n: int) -> list[dict]:
+    """The n strongest candidates, in video order."""
+    best = sorted(candidates, key=lambda c: -float(c.get("strength") or 0))[:max(0, n)]
+    return sorted(best, key=lambda c: c["spike_ts"])
+
+
+def queue_moments(cfg: Config, db: DB, channel: str, candidates: list[dict]) -> int:
     merge = float(cfg["detect"]["merge_window_seconds"])
-    added = 0
-    for ev in detect_file(chat_log, channel, cfg["detect"]):
-        added += int(db.add_event(ev.event_id, ev.channel, ev.spike_ts, ev.peak_ts, ev.stats, merge_window=merge))
-    return added
+    return sum(int(db.add_event(c["event_id"], channel, c["spike_ts"], c["peak_ts"], c["stats"],
+                                merge_window=merge)) for c in candidates)
 
 
 # ----------------------------------------------------------------- ingest
-def ingest(cfg: Config, db: DB, url: str, run=_run, on_status=lambda s: None) -> dict:
-    """Turn one VOD link into a recording session with queued spikes."""
+def ingest(cfg: Config, db: DB, url: str, run=_run, on_status=lambda s: None,
+           max_shorts: int = DEFAULT_MAX_SHORTS) -> dict:
+    """Turn one video link into a recording session with up to max_shorts queued moments."""
     src = parse_source(url)
     existing = db.conn.execute("SELECT id FROM sessions WHERE source_url=?", (src["url"],)).fetchone()
     if existing:
@@ -234,13 +281,15 @@ def ingest(cfg: Config, db: DB, url: str, run=_run, on_status=lambda s: None) ->
     on_status("reading link")
     info = probe(cfg, src["url"], run)
     platform = src["platform"]
-    slug = channel_slug(info.get("uploader_id") or info.get("channel") or info.get("uploader") or "")
+    video_id = src["video_id"] or safe_id(str(info.get("id") or ""))
+    slug = channel_slug(info.get("uploader_id") or info.get("channel") or info.get("uploader")
+                        or info.get("extractor_key") or "")
     duration = float(info["duration"])
     start_wall = float(info.get("timestamp") or info.get("release_timestamp") or (time.time() - duration))
-    sid = f"{slug}_{platform}_{src['video_id']}"
+    sid = f"{slug}_{platform}_{video_id}"
     on_status("downloading")
     dest = cfg.path("recordings") / slug
-    video, chat_replay = download(cfg, src["url"], platform, dest, f"{slug}_{platform}_{src['video_id']}", info, run)
+    video, chat_replay = download(cfg, src["url"], platform, dest, sid, info, run)
     try:
         real = media.probe(cfg["extract"]["ffprobe"], video)
         duration = float(real.get("format", {}).get("duration") or duration)
@@ -251,36 +300,50 @@ def ingest(cfg: Config, db: DB, url: str, run=_run, on_status=lambda s: None) ->
     db.set_session_start(sid, start_wall)
     db.end_session(sid, start_wall + duration)
     sess = db.session(sid)
-    events = 0
-    used = []
+    n = clamp_shorts(max_shorts)
+    used, cands = [], []
     if chat_replay is not None:
         on_status("reading chat replay")
         log_path = cfg.path("chat") / slug / f"{sid}.log"
         msgs = youtube_chat_to_log(chat_replay, log_path, start_wall, duration)
         if msgs >= int(cfg["vod"]["min_chat_messages"]):
-            events += chat_spikes(cfg, db, slug, log_path)
+            cands = chat_candidates(cfg, slug, log_path)
             used.append("chat")
-    if cfg["vod"]["audio_always"] or not used:
+    if not used and cfg["scout"]["enabled"]:
+        from . import scout
+        try:
+            moments = scout.find_moments(cfg, video, duration, n, on_status=on_status,
+                                         title=info.get("title") or "", channel=slug)
+        except scout.ScoutError as e:
+            log.warning("scout found nothing usable for %s: %s", sid, e)
+            moments = []
+        if moments:
+            cands = scout.to_candidates(moments, slug, start_wall)
+            used.append("scout")
+    if not used or cfg["vod"]["audio_always"]:
         on_status("listening for loud moments")
-        events += audio_spikes(cfg, db, sess)
+        cands += loud_candidates(cfg, sess)
         used.append("audio")
+    events = queue_moments(cfg, db, slug, cap(cands, n))
     db.kv_set(f"vod:{sid}", {"url": src["url"], "title": info.get("title"), "detectors": used,
-                             "events": events, "duration": duration, "done": utc_iso(time.time())})
-    log.info("VOD %s: %s, %.0f min, %d spike(s) from %s", sid, (info.get("title") or "")[:60],
+                             "events": events, "duration": duration, "max_shorts": n,
+                             "done": utc_iso(time.time())})
+    log.info("video %s: %s, %.0f min, %d moment(s) from %s", sid, (info.get("title") or "")[:60],
              duration / 60, events, "+".join(used))
     return {"session_id": sid, "events": events, "detectors": used, "title": info.get("title")}
 
 
 # ------------------------------------------------------------------ queue
-def add_job(db: DB, url: str, source: str = "manual") -> tuple[int, bool]:
+def add_job(db: DB, url: str, source: str = "manual",
+            max_shorts: int = DEFAULT_MAX_SHORTS) -> tuple[int, bool]:
     """Queue a link. Returns (job id, newly queued). The same link is never queued twice."""
     src = parse_source(url)
     row = db.conn.execute("SELECT id FROM vod_jobs WHERE url=?", (src["url"],)).fetchone()
     if row:
         return row["id"], False
-    cur = db.conn.execute("INSERT INTO vod_jobs(url, platform, status, source, created, updated) "
-                          "VALUES(?, ?, 'pending', ?, ?, ?)",
-                          (src["url"], src["platform"], source, time.time(), time.time()))
+    cur = db.conn.execute("INSERT INTO vod_jobs(url, platform, status, source, max_shorts, created, updated) "
+                          "VALUES(?, ?, 'pending', ?, ?, ?, ?)",
+                          (src["url"], src["platform"], source, clamp_shorts(max_shorts), time.time(), time.time()))
     return cur.lastrowid, True
 
 
@@ -296,7 +359,7 @@ def work_one(cfg: Config, db: DB, run=_run) -> bool:
     def status(text: str) -> None:
         db.conn.execute("UPDATE vod_jobs SET note=?, updated=? WHERE id=?", (text, time.time(), row["id"]))
     try:
-        res = ingest(cfg, db, row["url"], run, status)
+        res = ingest(cfg, db, row["url"], run, status, max_shorts=row["max_shorts"])
         db.conn.execute("UPDATE vod_jobs SET status='done', session_id=?, events=?, note=?, error=NULL, updated=? "
                         "WHERE id=?", (res["session_id"], res.get("events", 0),
                                        res.get("title") or "already added", time.time(), row["id"]))
@@ -398,6 +461,11 @@ def vod_forever(cfg: Config, db: DB) -> None:
     """The `vod` stage: work queued links one at a time and check the watch list on a timer."""
     every = float(cfg["vod"]["watch_interval_minutes"]) * 60
     last = 0.0
+    # This stage is the only worker of vod_jobs: a job left 'running' was cut off (app closed, crash).
+    n = db.conn.execute("UPDATE vod_jobs SET status='pending', updated=? WHERE status='running'",
+                        (time.time(),)).rowcount
+    if n:
+        log.info("picking up %d video link(s) that were interrupted", n)
     log.info("vod worker ready (watch list checked every %.0f min)", every / 60)
     while not STOP.is_set():
         if time.time() - last >= every:

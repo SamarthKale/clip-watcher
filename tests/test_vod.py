@@ -34,7 +34,7 @@ class LinkTests(unittest.TestCase):
                          "https://www.youtube.com/watch?v=dQw4w9WgXcQ")
 
     def test_unsupported_links_explain_why(self):
-        for url in ("https://example.com/a", "https://www.twitch.tv/somechannel", "https://www.youtube.com/@name",
+        for url in ("https://www.twitch.tv/somechannel", "https://www.youtube.com/@name",
                     "https://www.youtube.com/watch", "not a link at all", "", "https://kick.com/somebody"):
             with self.assertRaises(vod.VodError, msg=url):
                 vod.parse_source(url)

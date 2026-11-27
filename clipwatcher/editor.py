@@ -234,6 +234,17 @@ def _signals(cfg: Config, raw: Path, jdir: Path, meta: dict, chat: dict) -> tupl
 def _spike_text(spike: dict, st: dict) -> str:
     also = ", ".join(sorted({d.get("source", "?") for d in st.get("also_detected_by", [])}))
     also = f" Also detected by: {also}." if also else ""
+    if st.get("source") == "scout":
+        w = st.get("window") or {}
+        length = float(w.get("end", 0)) - float(w.get("start", 0))
+        end_in_clip = spike["spike_in_clip_s"] + length
+        return (f"The **scout** read the whole video and picked this moment: **{st.get('title') or 'untitled'}** "
+                f"({st.get('kind', 'other')}, score {st.get('score')}/100). It runs from **{spike['spike_in_clip_s']:.1f}s** "
+                f"to **{end_in_clip:.1f}s** in this clip. Why: {st.get('why') or '-'}"
+                + (f" Hook: \"{st['hook']}\"." if st.get("hook") else "") + f"{also}\n"
+                "The moment was chosen on purpose from the transcript, so make a Short from it unless the footage "
+                "truly can't carry one. Tighten the in/out to the real setup and payoff; there are 15 s of padding "
+                "either side.")
     if st.get("source") == "audio":
         return (f"The **audio** got loud at **{spike['spike_in_clip_s']:.1f}s** into the clip and peaked at "
                 f"**{spike['peak_in_clip_s']:.1f}s** ({st.get('peak_lufs')} LUFS vs a 5-minute baseline of "

@@ -14,6 +14,7 @@ const STATUS: Record<string, string> = {
 export function Vod() {
   const data = usePipelinePoll(() => pipe.get<VodData>('vod'), 3000);
   const [links, setLinks] = useState('');
+  const [shorts, setShorts] = useState(5);
   const [msg, setMsg] = useState<{ tone: 'info' | 'error'; text: string } | null>(null);
   const [w, setW] = useState({ platform: 'twitch', channel: '', keyword: '', hours: 36 });
   const d = data.data;
@@ -21,7 +22,7 @@ export function Vod() {
   const add = async () => {
     setMsg(null);
     try {
-      const r = await pipe.post<{ ok: boolean; message: string; results?: { url: string; error?: string }[] }>('vod/add', { url: links });
+      const r = await pipe.post<{ ok: boolean; message: string; results?: { url: string; error?: string }[] }>('vod/add', { url: links, shorts });
       const bad = (r.results ?? []).filter((x) => x.error);
       setMsg({ tone: r.ok ? 'info' : 'error', text: [r.message, ...bad.map((b) => `${b.url}: ${b.error}`)].join('\n') });
       if (r.ok) setLinks('');
@@ -48,16 +49,22 @@ export function Vod() {
 
   return (
     <div>
-      <PageHeader title="Add a VOD" subtitle="Paste the link of a finished stream (Twitch, YouTube or Kick). It is downloaded, scanned for spikes and clipped like a live stream." />
-      {data.offline && <Notice tone="warn" className="mb-4">The clipping pipeline is not running. Links you add are worked once it is.</Notice>}
+      <PageHeader title="Add a video" subtitle="Paste any video link: a finished stream, a podcast episode, any YouTube video, or another site yt-dlp supports. Spikecut downloads it, finds the best moments and edits them into Shorts by itself." />
+      {data.offline && <Notice tone="warn" className="mb-4">Spikecut's pipeline isn't reachable right now. Links you add are worked as soon as it is.</Notice>}
       {msg && <Notice tone={msg.tone === 'error' ? 'error' : 'info'} className="mb-4"><span className="whitespace-pre-wrap">{msg.text}</span></Notice>}
 
       <Card className="mb-4 space-y-3">
-        <Field label="Links" hint="One or several, separated by spaces or new lines. Twitch: twitch.tv/videos/…  YouTube: a video or /live/ link  Kick: kick.com/video/…">
-          <textarea className={`${inputCls} h-24 font-mono text-xs`} value={links} onChange={(e) => setLinks(e.target.value)} placeholder="https://www.twitch.tv/videos/123456789" aria-label="VOD links" />
+        <Field label="Links" hint="One or several, separated by spaces or new lines. YouTube videos, Shorts, streams and podcasts; Twitch and Kick past broadcasts or clips; most other video sites. Playlists, channels and live streams aren't links to one video.">
+          <textarea className={`${inputCls} h-24 font-mono text-xs`} value={links} onChange={(e) => setLinks(e.target.value)} placeholder="https://www.youtube.com/watch?v=…" aria-label="Video links" />
         </Field>
-        <Button variant="primary" onClick={add} disabled={!links.trim()}>Add to queue</Button>
-        <p className="text-xs text-zinc-500">YouTube streams use their chat replay to find spikes. Twitch and Kick VODs have no chat replay, so loud moments (screams, big reactions) are used instead.</p>
+        <div className="flex flex-wrap items-end gap-3">
+          <Field label="Shorts per video" hint="At most this many Shorts from each link (1-20).">
+            <input className={`${inputCls} w-24`} type="number" min={1} max={20} value={shorts} aria-label="Shorts per video"
+              onChange={(e) => setShorts(Math.max(1, Math.min(20, Number(e.target.value) || 1)))} />
+          </Field>
+          <Button variant="primary" onClick={add} disabled={!links.trim()}>Add and start</Button>
+        </div>
+        <p className="text-xs text-zinc-500">Work starts by itself; you don't need to press Start or pick a channel. A stream with a chat replay is clipped where chat spiked. Anything else is transcribed in full and Claude picks its best moments (podcasts and talking videos get a follow-the-speaker edit). Long videos take a while: the whole thing is downloaded and transcribed first.</p>
       </Card>
 
       <Card className="mb-4">
@@ -68,7 +75,7 @@ export function Vod() {
               <tr key={j.id} className="border-t border-zinc-200/60 align-top first:border-0 dark:border-zinc-700/60">
                 <td className="py-2 pr-2"><span className={`rounded-full px-2.5 py-0.5 text-xs font-semibold ${STATUS[j.status] ?? STATUS.pending}`}>{j.status}</span></td>
                 <td className="py-2 pr-2"><div className="break-all">{j.url}</div>
-                  <div className="text-xs text-zinc-500">{j.note ?? ''}{j.status === 'done' ? ` · ${j.events} spike(s)` : ''}{j.source.startsWith('watch') ? ` · from ${j.source.slice(6)}` : ''}</div>
+                  <div className="text-xs text-zinc-500">{j.note ?? ''}{j.status === 'done' ? ` · ${j.events} moment(s)` : ''}{` · up to ${j.max_shorts ?? 5} Shorts`}{j.source.startsWith('watch') ? ` · from ${j.source.slice(6)}` : ''}</div>
                   {j.error && <div className="mt-1 text-xs text-red-500">{j.error}</div>}</td>
                 <td className="py-2 text-right">{j.status === 'failed' && <Button className="!px-2.5 !py-1 text-xs" onClick={() => retry(j.id)}>Retry</Button>}</td>
               </tr>

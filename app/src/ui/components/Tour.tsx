@@ -141,13 +141,13 @@ export const TOUR_STEPS: TourStep[] = [
     id: 'vod',
     page: 'vod',
     icon: 'link',
-    kicker: 'Add a VOD',
-    title: 'Clip streams that already ended',
+    kicker: 'Add a video',
+    title: 'Any video, made into Shorts',
     body: (
       <>
-        <p>Missed a stream? Paste the link of a finished broadcast from <b>Twitch, YouTube or Kick</b>. It is downloaded, scanned for spikes and clipped exactly like a live one.</p>
+        <p>Paste any video link: a stream that already ended, a <b>podcast</b>, any <b>YouTube</b> video, or most other video sites. Spikecut starts on it by itself: download, find the best moments, edit.</p>
         <List>
-          <Li>YouTube streams use their chat replay to find spikes. Twitch and Kick replays have no chat, so the loudest reactions are used instead.</Li>
+          <Li>Streams with a chat replay are clipped where chat spiked. Everything else is transcribed in full and Claude picks the moments; you choose how many Shorts per video.</Li>
           <Li>The <b>watch list</b> follows streamers for you: new broadcasts are picked up automatically, optionally only when the title contains a keyword you set.</Li>
         </List>
       </>

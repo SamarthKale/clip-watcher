@@ -25,7 +25,7 @@ const PAGES: { id: string; label: string; icon: string; Page: ComponentType; gro
   { id: 'home', label: 'Home', icon: 'grid', Page: Home, group: 'Create' },
   { id: 'spikes', label: 'Spikes & clips', icon: 'sparkles', Page: Spikes, group: 'Create' },
   { id: 'shorts', label: 'Shorts', icon: 'film', Page: Shorts, group: 'Create' },
-  { id: 'vod', label: 'Add a VOD', icon: 'link', Page: Vod, group: 'Create' },
+  { id: 'vod', label: 'Add a video', icon: 'link', Page: Vod, group: 'Create' },
   { id: 'library', label: 'Review & publish', icon: 'check', Page: Library, group: 'Publish' },
   { id: 'queue', label: 'Upload queue', icon: 'upload', Page: Queue, group: 'Publish' },
   { id: 'history', label: 'Upload history', icon: 'clock', Page: History, group: 'Publish' },

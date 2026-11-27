@@ -34,8 +34,13 @@ class VerifyTest(unittest.TestCase):
     def test_a_missing_required_file_is_a_problem(self):
         with tempfile.TemporaryDirectory() as d:
             _make_complete(Path(d))
-            (Path(d) / "models" / "ggml-base.en.bin").unlink()
-            self.assertEqual(stage.verify(Path(d), run=False), ["missing: models/ggml-base.en.bin"])
+            (Path(d) / "models" / "ggml-base.bin").unlink()
+            self.assertEqual(stage.verify(Path(d), run=False), ["missing: models/ggml-base.bin"])
+
+    def test_both_multilingual_models_ship(self):
+        self.assertIn("models/ggml-large-v3-turbo-q5_0.bin", stage.REQUIRED)
+        self.assertIn("models/ggml-base.bin", stage.REQUIRED)
+        self.assertNotIn("models/ggml-base.en.bin", stage.REQUIRED)
 
 
 if __name__ == "__main__":

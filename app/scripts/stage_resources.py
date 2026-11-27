@@ -7,7 +7,7 @@
   pipeline/   the clipwatcher package as compiled .pyc only, its dashboard files, the edit skill pack,
               the CC0 sound library and config.example.toml
   tools/      ffmpeg + ffprobe, whisper-cli + its DLLs, yt-dlp (copied from the repo's tools/ folder)
-  models/     the small English speech model
+  models/     the multilingual speech models (clip captions + the whole-video scout)
   node/       node.exe for the upload server: this machine's Node, whose ABI matches the ready-made
               better-sqlite3 build in app/node_modules (there is none for Electron's ABI)
   LICENSES/   what each bundled program is, its license and where its source is
@@ -32,7 +32,10 @@ OUT = APP / "release-res"
 CACHE = APP / "build-cache"
 PYVER = f"{sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}"
 PYTAG = f"python{sys.version_info.major}{sys.version_info.minor}"
-MODEL = "ggml-base.en.bin"
+HF = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/"
+# Multilingual (Hindi, English, Hinglish, ...): the turbo model transcribes each clip for captions;
+# the small base model reads whole videos quickly for the scout. Taken from ./models when present.
+MODELS = ("ggml-large-v3-turbo-q5_0.bin", "ggml-base.bin")
 
 # Relative to the staging folder; checked by verify().
 REQUIRED = [
@@ -50,7 +53,7 @@ REQUIRED = [
     "tools/whisper/whisper-cli.exe",
     "tools/yt-dlp/yt-dlp.exe",
     "node/node.exe",
-    f"models/{MODEL}",
+    *[f"models/{m}" for m in MODELS],
     "LICENSES/NOTICES.txt",
 ]
 
@@ -124,7 +127,9 @@ def stage_tools() -> None:
     (OUT / "node").mkdir(parents=True)
     shutil.copy2(node, OUT / "node" / "node.exe")
     (OUT / "models").mkdir(parents=True)
-    shutil.copy2(REPO / "models" / MODEL, OUT / "models" / MODEL)
+    for m in MODELS:
+        local = REPO / "models" / m
+        shutil.copy2(local if local.exists() else download(HF + m, CACHE / m), OUT / "models" / m)
 
 
 def stage_licenses() -> None:

@@ -93,9 +93,26 @@ describe('work folder', () => {
     const dir = path.join(tmp(), 'My Spikecut');
     expect(workfolder.prepare(dir, fakeResources())).toEqual({ created: true });
     const cfg = fs.readFileSync(path.join(dir, 'config.toml'), 'utf8');
-    expect(cfg).toContain('model = "models/ggml-base.en.bin"');
+    expect(cfg).toContain('model = "models/ggml-large-v3-turbo-q5_0.bin"');
     expect(cfg).not.toContain('ggml-medium');
-    expect(cfg).toContain('language = "en"');
+    expect(cfg).toContain('language = "auto"');
+  });
+
+  it('upgrades the speech lines Spikecut 1.0 wrote, once, and nothing else', () => {
+    const dir = tmp();
+    const old = ['channel = ""', '[detect]', 'threshold = 1.8', 'language = "en"', '[transcribe]',
+      'model = "models/ggml-base.en.bin"', 'language = "en"', 'threads = 4', ''].join('\n');
+    fs.writeFileSync(path.join(dir, 'config.toml'), old);
+    expect(workfolder.upgrade(dir)).toBe(true);
+    expect(fs.readFileSync(path.join(dir, 'config.toml'), 'utf8')).toBe(['channel = ""', '[detect]', 'threshold = 1.8',
+      'language = "en"', '[transcribe]', 'model = "models/ggml-large-v3-turbo-q5_0.bin"', 'language = "auto"',
+      'threads = 4', ''].join('\n'));
+    expect(workfolder.upgrade(dir)).toBe(false); // already done
+    // a model the owner chose is theirs: untouched
+    const mine = ['channel = ""', '[transcribe]', 'model = "models/ggml-medium.en.bin"', 'language = "en"', ''].join('\n');
+    fs.writeFileSync(path.join(dir, 'config.toml'), mine);
+    expect(workfolder.upgrade(dir)).toBe(false);
+    expect(fs.readFileSync(path.join(dir, 'config.toml'), 'utf8')).toBe(mine);
   });
 
   it('never touches a folder that already has a config (your existing work)', () => {

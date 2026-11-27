@@ -6,7 +6,7 @@ export interface PipelineState {
   now: number;
   channel: string;
   channel_url: string;
-  pipeline: { running: boolean; owned: boolean; channel: string | null; since: number | null; chat_age: number | null };
+  pipeline: { running: boolean; owned: boolean; channel: string | null; since: number | null; chat_age: number | null; mode?: 'live' | 'links' | null };
   live: boolean;
   live_since: number | null;
   stats: { spikes_today: number; shorts_today: number; shorts_total: number; queue: { waiting: number; editing: number } };
@@ -55,7 +55,7 @@ export interface UsageSummary {
   videos: { event_id: string; finished: boolean; outcome: string; attempts: number; turns: number; cost_usd: number; wasted_usd: number; input_tokens: number; cache_read: number; cache_write: number; output_tokens: number; duration_s: number; models: string[] }[];
 }
 export interface VodData {
-  jobs: { id: number; url: string; platform: string; status: string; note: string | null; error: string | null; events: number; source: string }[];
+  jobs: { id: number; url: string; platform: string; status: string; note: string | null; error: string | null; events: number; source: string; max_shorts?: number }[];
   watch: { id: number; platform: string; channel: string; keyword: string; lookback_hours: number; enabled: number; last_checked: number | null }[];
 }
 export interface StorageItem {

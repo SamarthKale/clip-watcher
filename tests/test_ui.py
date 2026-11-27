@@ -105,6 +105,16 @@ class DashboardTests(unittest.TestCase):
             self.assertNotIn(word, src)
 
 
+class _NoRunner:
+    channel, started = None, None
+
+    def owned_running(self):
+        return False
+
+    def start_links(self):
+        return "started"
+
+
 class ApiTests(unittest.TestCase):
     """The pipeline API the desktop app talks to, over real HTTP on a throwaway port."""
 
@@ -112,6 +122,7 @@ class ApiTests(unittest.TestCase):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         self.dash = make_dash(tmp.name)
+        self.dash.runner = _NoRunner()  # adding a link must not start a real pipeline in tests
         ui.Handler.dash = self.dash
         self.httpd = ThreadingHTTPServer(("127.0.0.1", 0), ui.Handler)
         self.httpd.daemon_threads = True
@@ -136,7 +147,7 @@ class ApiTests(unittest.TestCase):
         self.assertTrue(paths["library"].endswith("Shorts") and "data" in paths)
 
     def test_vod_links_are_queued_once_and_bad_ones_explained(self):
-        st, r = self.call("/api/vod/add", {"url": "https://youtu.be/dQw4w9WgXcQ  https://example.com/x"})
+        st, r = self.call("/api/vod/add", {"url": "https://youtu.be/dQw4w9WgXcQ  https://www.youtube.com/@somechannel"})
         self.assertEqual((st, r["ok"]), (200, True))
         self.assertEqual([("error" in x) for x in r["results"]], [False, True])
         _, again = self.call("/api/vod/add", {"url": "https://youtu.be/dQw4w9WgXcQ"})
@@ -144,7 +155,7 @@ class ApiTests(unittest.TestCase):
         listing = self.call("/api/vod")[1]
         self.assertEqual(len(listing["jobs"]), 1)
         self.assertFalse(self.call("/api/vod/add", {"url": "   "})[1]["ok"])
-        self.assertFalse(self.call("/api/vod/add", {"url": "https://example.com/x"})[1]["ok"])
+        self.assertFalse(self.call("/api/vod/add", {"url": "ftp://example.com/x"})[1]["ok"])
 
     def test_watch_list_add_remove_and_bad_input(self):
         self.assertTrue(self.call("/api/watch/add", {"platform": "twitch", "channel": "abc", "keyword": "ranked"})[1]["ok"])

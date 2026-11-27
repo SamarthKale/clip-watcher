@@ -7,7 +7,43 @@ const fs = require('node:fs');
 const path = require('node:path');
 
 const CHOICE = 'workfolder.json';
-const BUNDLED_MODEL = 'models/ggml-base.en.bin';
+// Multilingual: Hindi, English, Hinglish and others are detected per clip.
+const BUNDLED_MODEL = 'models/ggml-large-v3-turbo-q5_0.bin';
+// What Spikecut 1.0 wrote into new work folders (English only; that model no longer ships).
+const OLD_MODEL_LINE = 'model = "models/ggml-base.en.bin"';
+
+/** Applies fn to the text of the [transcribe] table only. */
+function inTranscribe(text, fn) {
+  const m = /^\[transcribe\][^\n]*\n/m.exec(text);
+  if (!m) return text;
+  const start = m.index + m[0].length;
+  const next = text.slice(start).search(/^\[/m);
+  const end = next === -1 ? text.length : start + next;
+  return text.slice(0, start) + fn(text.slice(start, end)) + text.slice(end);
+}
+
+function speechLines(text) {
+  return inTranscribe(text, (t) => t.replace(/^model\s*=.*$/m, `model = "${BUNDLED_MODEL}"`).replace(/^language\s*=.*$/m, 'language = "auto"'));
+}
+
+/**
+ * A work folder made by Spikecut 1.0 names the English-only model it shipped. Upgrade exactly those
+ * lines (model + its language) once; a model the owner picked is never touched. Returns true if changed.
+ */
+function upgrade(dir) {
+  const cfg = path.join(dir, 'config.toml');
+  let text;
+  try { text = fs.readFileSync(cfg, 'utf8'); } catch { return false; }
+  let hit = false;
+  const next = inTranscribe(text, (t) => {
+    if (!t.split(/\r?\n/).some((l) => l.trim() === OLD_MODEL_LINE)) return t;
+    hit = true;
+    return t.replace(/^model\s*=.*$/m, `model = "${BUNDLED_MODEL}"`).replace(/^language\s*=\s*"en"\s*$/m, 'language = "auto"');
+  });
+  if (!hit) return false;
+  fs.writeFileSync(cfg, next, 'utf8');
+  return true;
+}
 
 function readChoice(userData) {
   try {
@@ -29,7 +65,7 @@ function prepare(dir, resourcesPath) {
   const cfg = path.join(dir, 'config.toml');
   if (fs.existsSync(cfg)) return { created: false };
   const example = fs.readFileSync(path.join(resourcesPath, 'pipeline', 'config.example.toml'), 'utf8');
-  fs.writeFileSync(cfg, example.replace(/^model\s*=.*$/m, `model = "${BUNDLED_MODEL}"`), 'utf8');
+  fs.writeFileSync(cfg, speechLines(example), 'utf8');
   return { created: true };
 }
 
@@ -46,7 +82,7 @@ function setUp({ userData, override, resourcesPath, ask }) {
   const remembered = override ? null : readChoice(userData);
   const dir = override || remembered || ask();
   try {
-    prepare(dir, resourcesPath);
+    if (!prepare(dir, resourcesPath).created) upgrade(dir);
   } catch (e) {
     throw new Error(`Spikecut can't use the folder ${dir}: ${e.message}`);
   }
@@ -54,4 +90,4 @@ function setUp({ userData, override, resourcesPath, ask }) {
   return dir;
 }
 
-module.exports = { readChoice, saveChoice, prepare, forget, setUp };
+module.exports = { readChoice, saveChoice, prepare, upgrade, forget, setUp };
