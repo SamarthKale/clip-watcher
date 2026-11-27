@@ -24,7 +24,7 @@ import sys
 import time
 from pathlib import Path
 
-from . import export, library, media, signals, thumbs
+from . import export, library, media, signals, thumbs, usage
 from .config import Config
 from .db import DB
 from .extractor import clip_dir
@@ -492,6 +492,9 @@ def handle(cfg: Config, db: DB, job) -> Done | Skip:
 
     if which(cfg["edit"]["claude"]) is None:
         raise RuntimeError("Claude Code CLI not found; install it or set edit.mode = \"manual\"")
+    cap = float(cfg["edit"].get("max_spend_usd") or 0)
+    if cap and usage.spent_usd(db, event_id) >= cap:
+        return Skip(f"spend cap reached (${usage.spent_usd(db, event_id):.2f} of ${cap:.2f}); raise edit.max_spend_usd to allow more")
     prompt = (f"Read {_rel(cfg, jdir / 'EDIT_JOB.md')} and carry out that editing job completely, "
               f"following {_rel(cfg, PLAYBOOK_PATH)}. Inspect your render before finishing.")
     log.info("handing %s to Claude Code", event_id)
@@ -507,9 +510,13 @@ def handle(cfg: Config, db: DB, job) -> Done | Skip:
     (jdir / "claude_run.json").write_text(proc.stdout or "", encoding="utf-8")
     if proc.stderr:
         (jdir / "claude_run.stderr.txt").write_text(proc.stderr, encoding="utf-8")
+    usage.save_attempt_file(jdir, job["attempts"], proc.stdout, proc.stderr)
     problems = finish(cfg, None, event_id)
+    was_rejected = not problems and rejected(cfg, event_id)
+    usage.record_attempt(db, event_id, job["attempts"],
+                         "invalid" if problems else "rejected" if was_rejected else "done", proc.stdout)
     if problems:
         raise RuntimeError(f"Claude exited {proc.returncode}; output not valid: " + "; ".join(problems))
-    if rejected(cfg, event_id):
+    if was_rejected:
         return Done({}, status="rejected", note="editor rejected the clip")
     return Done({"short": str(short_dir(cfg, event_id) / "short.mp4")})

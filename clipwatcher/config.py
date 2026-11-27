@@ -154,6 +154,8 @@ DEFAULTS: dict[str, Any] = {
         # finish requires the SEO block (title, description, hashtags, tags, captions) in
         # edit_decisions.json; the library step then publishes the Short for the uploader.
         "require_seo": True,
+        # Stop retrying a clip once its Claude usage (list-price equivalent) reaches this (0 = no cap).
+        "max_spend_usd": 6.0,
         "library": True,
     },
     "library": {

@@ -58,6 +58,9 @@ def build_parser() -> argparse.ArgumentParser:
     _common(p)
     p.add_argument("event_id")
     p.add_argument("stage", choices=("extract", "transcribe", "edit"))
+    p = sub.add_parser("usage", help="Claude usage per video, per day and in total")
+    _common(p)
+    p.add_argument("--backfill", action="store_true", help="import edit runs saved before usage tracking")
     p = sub.add_parser("skip", help="skip a stuck or unwanted clip (it is still backed up, never deleted)")
     _common(p)
     p.add_argument("event_id")
@@ -270,6 +273,22 @@ def cmd_skip(cfg, db, args):
     return 0 if ok else 1
 
 
+def cmd_usage(cfg, db, args):
+    from . import usage
+    if args.backfill:
+        print(f"imported {usage.backfill(cfg, db)} earlier edit run(s)")
+    s = usage.summary(db)
+    t = s["total"]
+    print(f"{t['videos']} video(s), {t['finished']} finished, {t['attempts']} attempt(s)")
+    print(f"list-price equivalent ${t['cost_usd']:.2f} total, ${t['wasted_usd']:.2f} on attempts that did not finish")
+    if t["avg_per_finished_usd"] is not None:
+        print(f"average per finished Short: ${t['avg_per_finished_usd']:.2f}")
+    for v in s["videos"][:15]:
+        print(f"  {v['event_id']:<34} {v['outcome']:<9} {v['attempts']} try  {v['turns']:>3} turns  "
+              f"{(v['cache_read'] + v['input_tokens'] + v['cache_write']) / 1e6:5.2f}M in  "
+              f"{v['output_tokens'] / 1000:5.1f}K out  ${v['cost_usd']:.2f}")
+
+
 def cmd_finish(cfg, db, args):
     from .editor import finish
     problems = finish(cfg, db, args.event_id)
@@ -368,5 +387,5 @@ COMMANDS = {
     "status": cmd_status, "check": cmd_check, "detect-file": cmd_detect_file,
     "retry": cmd_retry, "finish": cmd_finish, "next-edit": cmd_next_edit,
     "make-assets": cmd_make_assets, "storage": cmd_storage, "audiodetect": cmd_audiodetect,
-    "ui": lambda cfg, db, args: cmd_ui(cfg, db, args), "skip": cmd_skip,
+    "ui": lambda cfg, db, args: cmd_ui(cfg, db, args), "skip": cmd_skip, "usage": cmd_usage,
 }

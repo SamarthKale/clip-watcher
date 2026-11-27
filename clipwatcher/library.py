@@ -23,6 +23,7 @@ import unicodedata
 from pathlib import Path
 
 from .config import Config
+from .db import DB
 from .util import read_json, utc_iso
 
 log = logging.getLogger("library")
@@ -220,10 +221,16 @@ def publish(cfg: Config, db, event_id: str) -> Path | None:
     channel, ts = parse_event_id(event_id)
     session_id = meta.get("recording_session") or ""
     kind = "live"
-    if db is not None and session_id:
-        row = db.session(session_id)
-        if row is not None and "kind" in row.keys() and row["kind"]:
-            kind = row["kind"]
+    if session_id:
+        own = db is None
+        d = DB(cfg.path("db")) if own else db
+        try:
+            row = d.session(session_id)
+            if row is not None and "kind" in row.keys() and row["kind"]:
+                kind = row["kind"]
+        finally:
+            if own:
+                d.close()
     seo = dec.get("seo") if isinstance(dec.get("seo"), dict) else None
     if seo is None:
         txt = (sdir / "description.txt").read_text("utf-8", "replace") if (sdir / "description.txt").exists() else ""

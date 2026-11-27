@@ -59,6 +59,23 @@ CREATE TABLE IF NOT EXISTS storage_log (
     dst     TEXT,
     detail  TEXT                -- checksum or reason
 );
+CREATE TABLE IF NOT EXISTS edit_usage (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    event_id      TEXT NOT NULL,
+    attempt       INTEGER NOT NULL,
+    model         TEXT,
+    input_tokens  INTEGER NOT NULL DEFAULT 0,   -- uncached input
+    cache_read    INTEGER NOT NULL DEFAULT 0,
+    cache_write   INTEGER NOT NULL DEFAULT 0,
+    output_tokens INTEGER NOT NULL DEFAULT 0,
+    cost_usd      REAL NOT NULL DEFAULT 0,      -- list-price equivalent reported by Claude Code
+    turns         INTEGER NOT NULL DEFAULT 0,
+    duration_ms   INTEGER NOT NULL DEFAULT 0,
+    outcome       TEXT NOT NULL,                -- done | rejected | invalid | error
+    created       REAL NOT NULL,
+    UNIQUE(event_id, attempt, created)
+);
+CREATE INDEX IF NOT EXISTS edit_usage_event ON edit_usage(event_id);
 CREATE TABLE IF NOT EXISTS kv (
     key   TEXT PRIMARY KEY,
     value TEXT
@@ -253,6 +270,21 @@ class DB:
                                 "lease_until=NULL, updated=? WHERE event_id=? AND stage=?",
                                 (time.time(), event_id, stage))
         return cur.rowcount
+
+    # ------------------------------------------------------------- usage
+    def add_usage(self, event_id: str, attempt: int, outcome: str, u: dict, created: float | None = None) -> None:
+        self.conn.execute(
+            "INSERT OR IGNORE INTO edit_usage(event_id, attempt, model, input_tokens, cache_read, cache_write, "
+            "output_tokens, cost_usd, turns, duration_ms, outcome, created) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
+            (event_id, attempt, u.get("model"), int(u.get("input_tokens", 0)), int(u.get("cache_read", 0)),
+             int(u.get("cache_write", 0)), int(u.get("output_tokens", 0)), float(u.get("cost_usd", 0)),
+             int(u.get("turns", 0)), int(u.get("duration_ms", 0)), outcome, created or time.time()))
+
+    def usage_rows(self, event_id: str | None = None) -> list[sqlite3.Row]:
+        if event_id is None:
+            return self.conn.execute("SELECT * FROM edit_usage ORDER BY created").fetchall()
+        return self.conn.execute("SELECT * FROM edit_usage WHERE event_id=? ORDER BY created",
+                                 (event_id,)).fetchall()
 
     def skip(self, event_id: str, stage: str, note: str = "skipped by you") -> int:
         """Mark a waiting or failed job as skipped. A running job is left alone."""

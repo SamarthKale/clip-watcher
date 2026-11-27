@@ -434,6 +434,13 @@ class Handler(BaseHTTPRequestHandler):
                 return self._json(self.dash.state(ch))
             if url.path == "/api/chat":
                 return self._json(self.dash.chat(ch))
+            if url.path == "/api/usage":
+                from . import usage
+                udb = self.dash.db()
+                try:
+                    return self._json(usage.summary(udb))
+                finally:
+                    udb.close()
             if url.path == "/api/shorts":
                 return self._json(self.dash.shorts())
             if url.path == "/api/logs":
