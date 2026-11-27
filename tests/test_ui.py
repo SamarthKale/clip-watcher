@@ -1,10 +1,14 @@
 import json
+import os
+import threading
 import tempfile
 import time
 import unittest
 from pathlib import Path
 
 from clipwatcher import ui
+import urllib.request
+from http.server import ThreadingHTTPServer
 from clipwatcher.config import load_config
 
 
@@ -99,6 +103,111 @@ class DashboardTests(unittest.TestCase):
         src = Path(ui.__file__).read_text("utf-8")
         for word in ("upload(", "publish(", "youtube.com/upload", "requests."):
             self.assertNotIn(word, src)
+
+
+class ApiTests(unittest.TestCase):
+    """The pipeline API the desktop app talks to, over real HTTP on a throwaway port."""
+
+    def setUp(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        self.dash = make_dash(tmp.name)
+        ui.Handler.dash = self.dash
+        self.httpd = ThreadingHTTPServer(("127.0.0.1", 0), ui.Handler)
+        self.httpd.daemon_threads = True
+        threading.Thread(target=self.httpd.serve_forever, daemon=True).start()
+        self.addCleanup(self.httpd.server_close)
+        self.addCleanup(self.httpd.shutdown)
+        self.base = f"http://127.0.0.1:{self.httpd.server_address[1]}"
+
+    def call(self, path, body=None):
+        data = json.dumps(body).encode() if body is not None else None
+        req = urllib.request.Request(self.base + path, data=data, method="POST" if body is not None else "GET",
+                                     headers={"Content-Type": "application/json"})
+        try:
+            with urllib.request.urlopen(req, timeout=10) as r:
+                return r.status, json.loads(r.read())
+        except urllib.error.HTTPError as e:
+            return e.code, json.loads(e.read() or b"{}")
+
+    def test_health_and_paths(self):
+        self.assertEqual(self.call("/api/health")[1]["ok"], True)
+        paths = self.call("/api/paths")[1]
+        self.assertTrue(paths["library"].endswith("Shorts") and "data" in paths)
+
+    def test_vod_links_are_queued_once_and_bad_ones_explained(self):
+        st, r = self.call("/api/vod/add", {"url": "https://youtu.be/dQw4w9WgXcQ  https://example.com/x"})
+        self.assertEqual((st, r["ok"]), (200, True))
+        self.assertEqual([("error" in x) for x in r["results"]], [False, True])
+        _, again = self.call("/api/vod/add", {"url": "https://youtu.be/dQw4w9WgXcQ"})
+        self.assertFalse(again["results"][0]["queued"])
+        listing = self.call("/api/vod")[1]
+        self.assertEqual(len(listing["jobs"]), 1)
+        self.assertFalse(self.call("/api/vod/add", {"url": "   "})[1]["ok"])
+        self.assertFalse(self.call("/api/vod/add", {"url": "https://example.com/x"})[1]["ok"])
+
+    def test_watch_list_add_remove_and_bad_input(self):
+        self.assertTrue(self.call("/api/watch/add", {"platform": "twitch", "channel": "abc", "keyword": "ranked"})[1]["ok"])
+        self.assertEqual(self.call("/api/watch")[1]["watch"][0]["keyword"], "ranked")
+        self.assertFalse(self.call("/api/watch/add", {"platform": "tiktok", "channel": "abc"})[1]["ok"])
+        self.assertTrue(self.call("/api/watch/remove", {"platform": "twitch", "channel": "abc"})[1]["ok"])
+        self.assertFalse(self.call("/api/watch/remove", {"platform": "twitch", "channel": "abc"})[1]["ok"])
+
+    def test_storage_plan_and_run_refuse_unsafe_deletes(self):
+        from pathlib import Path as P
+        ed = P(self.dash.cfg.raw["storage"]["edited_dir"]) / "abc" / "2026-11-18" / "abc-1795000000"
+        ed.mkdir(parents=True)
+        (ed / "short.mp4").write_bytes(b"x" * 10)
+        t = time.time() - 40 * 86400
+        import os
+        os.utime(ed / "short.mp4", (t, t))
+        os.utime(ed, (t, t))
+        plan = self.call("/api/storage/plan", {"older_than_days": 30, "kinds": ["short"]})[1]
+        self.assertEqual((len(plan["delete"]), len(plan["blocked"])), (0, 1))  # not uploaded yet
+        item = plan["blocked"][0]
+        run = self.call("/api/storage/run", {"ids": [item["id"]]})[1]
+        self.assertEqual((run["deleted"], len(run["refused"])), ([], 1))
+        self.assertTrue(ed.exists())
+        self.assertEqual(self.call("/api/storage/plan", {"older_than_days": "abc"})[1]["ok"], False)
+
+    def test_shorts_list_skips_unfinished_edits(self):
+        from pathlib import Path as P
+        root = P(self.dash.cfg.raw["storage"]["edited_dir"]) / "abc" / "2026-11-18"
+        for name, finished in (("abc-1", True), ("abc-2", False)):
+            d = root / name
+            d.mkdir(parents=True)
+            (d / "short.mp4").write_bytes(b"x")
+            if finished:
+                (d / "metadata.json").write_text("{}", encoding="utf-8")
+        self.assertEqual([x["event_id"] for x in self.call("/api/shorts")[1]], ["abc-1"])
+
+    def test_setup_lists_every_tool_with_a_reason(self):
+        r = self.call("/api/setup")[1]
+        names = [t["name"] for t in r["tools"]]
+        for need in ("streamlink", "ffmpeg", "ffprobe", "yt-dlp"):
+            self.assertIn(need, names)
+        for t in r["tools"]:
+            self.assertEqual(set(t), {"name", "path", "ok", "hint", "needed_for"})
+        self.assertEqual(r["ok"], all(t["ok"] for t in r["tools"]))
+
+    def test_api_token_is_required_when_configured(self):
+        os.environ["CLIPPER_API_TOKEN"] = "s3cret"
+        self.addCleanup(os.environ.pop, "CLIPPER_API_TOKEN", None)
+        self.assertEqual(self.call("/api/health")[0], 401)
+        self.assertEqual(self.call("/api/storage/run", {"ids": []})[0], 401)
+        req = urllib.request.Request(self.base + "/api/health", headers={"x-clipper-token": "s3cret"})
+        with urllib.request.urlopen(req, timeout=10) as r:
+            self.assertEqual(r.status, 200)
+        bad = urllib.request.Request(self.base + "/api/health", headers={"x-clipper-token": "wrong"})
+        with self.assertRaises(urllib.error.HTTPError) as cm:
+            urllib.request.urlopen(bad, timeout=10)
+        self.assertEqual(cm.exception.code, 401)
+
+    def test_foreign_host_header_is_refused(self):
+        req = urllib.request.Request(self.base + "/api/health", headers={"Host": "evil.example"})
+        with self.assertRaises(urllib.error.HTTPError) as cm:
+            urllib.request.urlopen(req, timeout=10)
+        self.assertEqual(cm.exception.code, 403)
 
 
 if __name__ == "__main__":

@@ -7,3 +7,11 @@ tools/
 test-output/
 Edited Clips/
 assets/library.json
+app/node_modules/
+app/dist/
+app/data/
+app/test-results/
+app/playwright-report/
+app/out/
+app/.env
+Shorts/

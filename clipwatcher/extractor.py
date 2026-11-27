@@ -132,7 +132,7 @@ def handle(cfg: Config, db: DB, job) -> Done | Defer | Skip:
     frames = _extract_frames(cfg, clip, out_dir / "frames", actual, spike_in_clip, peak_in_clip)
 
     ctx = float(x["chat_context_seconds"])
-    msgs = read_window(chat_log_path(cfg, channel), ev["spike_ts"] - ctx, ev["spike_ts"] + ctx)
+    msgs = read_window(chat_log_path(cfg, channel, sess["id"]), ev["spike_ts"] - ctx, ev["spike_ts"] + ctx)
     for m in msgs:
         m["clip_t"] = round(m["t"] + chat_offset - start_wall - src_start, 2)
     write_json(out_dir / "chat_context.json", {
@@ -157,8 +157,10 @@ def handle(cfg: Config, db: DB, job) -> Done | Defer | Skip:
         "attribution": {
             "streamer": cfg.display_name if channel == cfg.channel else channel,
             "channel": channel,
-            "channel_url": channel_url(channel),
-            "credit_line": f"Streamer: {cfg.display_name if channel == cfg.channel else channel} - {channel_url(channel)}",
+            "platform": sess["platform"] or "twitch",
+            "channel_url": sess["channel_url"] or channel_url(channel),
+            "credit_line": f"Streamer: {cfg.display_name if channel == cfg.channel else channel} - "
+                           f"{sess['channel_url'] or channel_url(channel)}",
         },
         "recording": {
             "session_id": sess["id"],

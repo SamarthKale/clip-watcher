@@ -261,8 +261,14 @@ class ChatReader:
                 backoff = min(backoff * 2, float(self.c["reconnect_max_backoff"]))
 
 
-def chat_log_path(cfg: Config, channel: str | None = None) -> Path:
-    return cfg.path("chat") / (channel or cfg.channel) / "chat.log"
+def chat_log_path(cfg: Config, channel: str | None = None, session_id: str | None = None) -> Path:
+    """The live chat log of a channel, or (for a VOD session) the log built from its chat replay."""
+    base = cfg.path("chat") / (channel or cfg.channel)
+    if session_id:
+        per_session = base / f"{session_id}.log"
+        if per_session.exists():
+            return per_session
+    return base / "chat.log"
 
 
 def read_records(path: Path, start_offset: int = 0):

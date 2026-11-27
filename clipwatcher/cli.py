@@ -16,7 +16,7 @@ from .config import load_config
 from .db import DB
 from .util import STOP, install_stop_handlers, setup_logging, utc_iso, which
 
-STAGE_PROCESSES = ("record", "chat", "detect", "audiodetect", "extract", "transcribe", "edit", "storage")
+STAGE_PROCESSES = ("record", "chat", "detect", "audiodetect", "extract", "transcribe", "edit", "storage", "vodwork")
 
 
 def _common(p: argparse.ArgumentParser) -> None:
@@ -41,6 +41,7 @@ def build_parser() -> argparse.ArgumentParser:
         ("transcribe", "STEP 5: transcribe raw clips with whisper.cpp"),
         ("edit", "STEP 6: build editing jobs and run Claude Code on them"),
         ("storage", "back up raw clips to the external drive and clean up safely"),
+        ("vodwork", "work queued VOD links and check the watch list"),
         ("status", "show sessions, queues and recent jobs"),
         ("check", "check that external tools and config are in place"),
         ("next-edit", "list editing jobs waiting for a manual Claude Code session"),
@@ -58,6 +59,20 @@ def build_parser() -> argparse.ArgumentParser:
     _common(p)
     p.add_argument("event_id")
     p.add_argument("stage", choices=("extract", "transcribe", "edit"))
+    p = sub.add_parser("vod", help="clip a finished stream from its link, and manage the streamer watch list")
+    _common(p)
+    p.add_argument("action", choices=("add", "run", "list", "watch", "unwatch", "check"))
+    p.add_argument("items", nargs="*", help="add: links; watch/unwatch: platform:channel (twitch:name, youtube:@name)")
+    p.add_argument("--keyword", help="watch: only streams whose title contains this")
+    p.add_argument("--hours", type=int, default=36, help="watch: only streams newer than this many hours")
+    p = sub.add_parser("usage", help="Claude usage per video, per day and in total")
+    _common(p)
+    p.add_argument("--backfill", action="store_true", help="import edit runs saved before usage tracking")
+    p = sub.add_parser("skip", help="skip a stuck or unwanted clip (it is still backed up, never deleted)")
+    _common(p)
+    p.add_argument("event_id")
+    p.add_argument("stage", nargs="?", choices=("extract", "transcribe", "edit"),
+                   help="default: the stage the clip is waiting in")
     p = sub.add_parser("make-assets", help="generate the original sound library and index assets/")
     _common(p)
     p.add_argument("--force", action="store_true", help="regenerate files that already exist")
@@ -245,6 +260,81 @@ def cmd_retry(cfg, db, args):
     return 0 if n else 1
 
 
+def skip_job(db, event_id: str, stage: str | None = None) -> tuple[bool, str]:
+    """Skip a waiting/failed job. Skipping transcribe still edits; skipping edit still backs the clip up."""
+    from .worker import AFTER_TERMINAL
+    stage = stage or db.open_stage(event_id)
+    if stage is None:
+        return False, "nothing to skip for that clip (it is done or running)"
+    if not db.skip(event_id, stage):
+        return False, f"{stage} is running or already finished"
+    nxt = AFTER_TERMINAL.get(stage)
+    if nxt:
+        db.enqueue(event_id, nxt)
+    return True, f"skipped {stage}" + (f"; {nxt} queued" if nxt else "")
+
+
+def cmd_skip(cfg, db, args):
+    ok, msg = skip_job(db, args.event_id, args.stage)
+    print(msg)
+    return 0 if ok else 1
+
+
+def cmd_vod_stage(cfg, db, args):
+    from .vod import vod_forever
+    vod_forever(cfg, db)
+
+
+def cmd_vod(cfg, db, args):
+    from . import vod
+    try:
+        if args.action == "add":
+            for url in args.items:
+                jid, new = vod.add_job(db, url)
+                print(f"{'queued' if new else 'already queued'}: job {jid}  {url}")
+            print("It is worked by the `vodwork` stage (started by `run`), or run `python -m clipwatcher vod run` now.")
+        elif args.action == "run":
+            while vod.work_one(cfg, db):
+                pass
+        elif args.action == "list":
+            for r in db.conn.execute("SELECT * FROM vod_jobs ORDER BY id DESC LIMIT 30"):
+                print(f"  {r['id']:>3} {r['status']:<9} {r['platform']:<8} {r['url']}  {r['note'] or ''}"
+                      f"{('  ERROR: ' + r['error']) if r['error'] else ''}")
+        elif args.action == "watch":
+            if not args.items:
+                for w in db.conn.execute("SELECT * FROM watchlist ORDER BY id"):
+                    print(f"  {w['platform']}:{w['channel']}  filter={w['keyword'] or '(none)'}  "
+                          f"last {w['lookback_hours']} h  {'on' if w['enabled'] else 'off'}")
+            else:
+                plat, _, chan = args.items[0].partition(":")
+                vod.add_watch(db, plat, chan, args.keyword or "", args.hours)
+                print(f"watching {plat}:{chan}")
+        elif args.action == "unwatch":
+            plat, _, chan = args.items[0].partition(":")
+            print("removed" if vod.remove_watch(db, plat, chan) else "not on the list")
+        elif args.action == "check":
+            print(vod.watch_pass(cfg, db))
+    except vod.VodError as e:
+        print(f"clipwatcher: {e}")
+        return 1
+
+
+def cmd_usage(cfg, db, args):
+    from . import usage
+    if args.backfill:
+        print(f"imported {usage.backfill(cfg, db)} earlier edit run(s)")
+    s = usage.summary(db)
+    t = s["total"]
+    print(f"{t['videos']} video(s), {t['finished']} finished, {t['attempts']} attempt(s)")
+    print(f"list-price equivalent ${t['cost_usd']:.2f} total, ${t['wasted_usd']:.2f} on attempts that did not finish")
+    if t["avg_per_finished_usd"] is not None:
+        print(f"average per finished Short: ${t['avg_per_finished_usd']:.2f}")
+    for v in s["videos"][:15]:
+        print(f"  {v['event_id']:<34} {v['outcome']:<9} {v['attempts']} try  {v['turns']:>3} turns  "
+              f"{(v['cache_read'] + v['input_tokens'] + v['cache_write']) / 1e6:5.2f}M in  "
+              f"{v['output_tokens'] / 1000:5.1f}K out  ${v['cost_usd']:.2f}")
+
+
 def cmd_finish(cfg, db, args):
     from .editor import finish
     problems = finish(cfg, db, args.event_id)
@@ -318,6 +408,28 @@ def _check(cfg, quiet=False) -> list[str]:
     return problems
 
 
+def tool_status(cfg) -> list[dict]:
+    """Every external tool the product needs: name, where it was found (or None) and how to get it."""
+    rows = [("streamlink", cfg["record"]["streamlink"], "pip install streamlink", "recording live streams"),
+            ("ffmpeg", cfg["extract"]["ffmpeg"], "https://www.gyan.dev/ffmpeg/builds/", "cutting and editing video"),
+            ("ffprobe", cfg["extract"]["ffprobe"], "comes with ffmpeg", "reading video files")]
+    if cfg["transcribe"]["enabled"]:
+        rows.append(("whisper-cli", cfg["transcribe"]["whisper_cli"],
+                     "https://github.com/ggml-org/whisper.cpp/releases", "subtitles (Hindi, English, Hinglish)"))
+    rows.append(("yt-dlp", cfg["vod"]["ytdlp"], "https://github.com/yt-dlp/yt-dlp/releases", "YouTube and Kick links"))
+    if cfg["edit"]["mode"] == "claude":
+        rows.append(("claude", cfg["edit"]["claude"], "https://claude.com/claude-code", "editing Shorts"))
+    out = []
+    for name, binary, hint, why in rows:
+        path = which(binary) or (str(cfg.resolve(binary)) if cfg.resolve(binary).exists() else None)
+        out.append({"name": name, "path": path, "ok": bool(path), "hint": hint, "needed_for": why})
+    if cfg["transcribe"]["enabled"]:
+        model = cfg.resolve(cfg["transcribe"]["model"])
+        out.append({"name": "speech model", "path": str(model) if model.exists() else None, "ok": model.exists(),
+                    "hint": "https://huggingface.co/ggerganov/whisper.cpp", "needed_for": "subtitles"})
+    return out
+
+
 def cmd_check(cfg, db, args):
     from .soundlib import load_library, usable_items
     from .storage import drive_ready, edited_root, raw_archive_root, recordings_archive_root
@@ -343,5 +455,5 @@ COMMANDS = {
     "status": cmd_status, "check": cmd_check, "detect-file": cmd_detect_file,
     "retry": cmd_retry, "finish": cmd_finish, "next-edit": cmd_next_edit,
     "make-assets": cmd_make_assets, "storage": cmd_storage, "audiodetect": cmd_audiodetect,
-    "ui": lambda cfg, db, args: cmd_ui(cfg, db, args),
+    "ui": lambda cfg, db, args: cmd_ui(cfg, db, args), "skip": cmd_skip, "usage": cmd_usage, "vod": cmd_vod, "vodwork": cmd_vod_stage,
 }

@@ -59,6 +59,48 @@ CREATE TABLE IF NOT EXISTS storage_log (
     dst     TEXT,
     detail  TEXT                -- checksum or reason
 );
+CREATE TABLE IF NOT EXISTS edit_usage (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    event_id      TEXT NOT NULL,
+    attempt       INTEGER NOT NULL,
+    model         TEXT,
+    input_tokens  INTEGER NOT NULL DEFAULT 0,   -- uncached input
+    cache_read    INTEGER NOT NULL DEFAULT 0,
+    cache_write   INTEGER NOT NULL DEFAULT 0,
+    output_tokens INTEGER NOT NULL DEFAULT 0,
+    cost_usd      REAL NOT NULL DEFAULT 0,      -- list-price equivalent reported by Claude Code
+    turns         INTEGER NOT NULL DEFAULT 0,
+    duration_ms   INTEGER NOT NULL DEFAULT 0,
+    outcome       TEXT NOT NULL,                -- done | rejected | invalid | error
+    created       REAL NOT NULL,
+    UNIQUE(event_id, attempt, created)
+);
+CREATE INDEX IF NOT EXISTS edit_usage_event ON edit_usage(event_id);
+CREATE TABLE IF NOT EXISTS vod_jobs (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    url        TEXT NOT NULL UNIQUE,
+    platform   TEXT NOT NULL,
+    status     TEXT NOT NULL,       -- pending | running | done | failed | filtered
+    attempts   INTEGER NOT NULL DEFAULT 0,
+    source     TEXT NOT NULL DEFAULT 'manual',   -- manual | watch:<platform>:<channel>
+    session_id TEXT,
+    events     INTEGER NOT NULL DEFAULT 0,
+    note       TEXT,
+    error      TEXT,
+    created    REAL NOT NULL,
+    updated    REAL NOT NULL
+);
+CREATE TABLE IF NOT EXISTS watchlist (
+    id             INTEGER PRIMARY KEY AUTOINCREMENT,
+    platform       TEXT NOT NULL,
+    channel        TEXT NOT NULL,
+    keyword        TEXT NOT NULL DEFAULT '',     -- only streams whose title contains this ('' = all)
+    lookback_hours INTEGER NOT NULL DEFAULT 36,
+    enabled        INTEGER NOT NULL DEFAULT 1,
+    last_checked   REAL,
+    created        REAL NOT NULL,
+    UNIQUE(platform, channel)
+);
 CREATE TABLE IF NOT EXISTS kv (
     key   TEXT PRIMARY KEY,
     value TEXT
@@ -79,6 +121,14 @@ class DB:
         cols = {r["name"] for r in self.conn.execute("PRAGMA table_info(sessions)")}
         if "disposition" not in cols:  # migration: offloaded | archived | deleted
             self.conn.execute("ALTER TABLE sessions ADD COLUMN disposition TEXT")
+        if "kind" not in cols:  # migration: live | vod
+            self.conn.execute("ALTER TABLE sessions ADD COLUMN kind TEXT NOT NULL DEFAULT 'live'")
+        if "source_url" not in cols:  # migration: the VOD link a session was made from
+            self.conn.execute("ALTER TABLE sessions ADD COLUMN source_url TEXT")
+        if "platform" not in cols:  # migration: twitch | youtube | kick
+            self.conn.execute("ALTER TABLE sessions ADD COLUMN platform TEXT NOT NULL DEFAULT 'twitch'")
+        if "channel_url" not in cols:  # migration: the streamer's channel link for attribution
+            self.conn.execute("ALTER TABLE sessions ADD COLUMN channel_url TEXT")
 
     def close(self) -> None:
         self.conn.close()
@@ -105,10 +155,12 @@ class DB:
                           (key, json.dumps(value)))
 
     # ---------------------------------------------------------- sessions
-    def add_session(self, sid: str, channel: str, path: str, quality: str) -> None:
-        self.conn.execute("INSERT INTO sessions(id, channel, path, status, quality, created) "
-                          "VALUES(?, ?, ?, 'recording', ?, ?)",
-                          (sid, channel, path, quality, time.time()))
+    def add_session(self, sid: str, channel: str, path: str, quality: str,
+                    kind: str = "live", source_url: str | None = None, platform: str = "twitch",
+                    channel_url: str | None = None) -> None:
+        self.conn.execute("INSERT INTO sessions(id, channel, path, status, quality, created, kind, source_url, "
+                          "platform, channel_url) VALUES(?, ?, ?, 'recording', ?, ?, ?, ?, ?, ?)",
+                          (sid, channel, path, quality, time.time(), kind, source_url, platform, channel_url))
 
     def set_session_start(self, sid: str, start_wall: float) -> None:
         self.conn.execute("UPDATE sessions SET start_wall=? WHERE id=?", (start_wall, sid))
@@ -248,6 +300,38 @@ class DB:
                                 "lease_until=NULL, updated=? WHERE event_id=? AND stage=?",
                                 (time.time(), event_id, stage))
         return cur.rowcount
+
+    # ------------------------------------------------------------- usage
+    def add_usage(self, event_id: str, attempt: int, outcome: str, u: dict, created: float | None = None) -> None:
+        self.conn.execute(
+            "INSERT OR IGNORE INTO edit_usage(event_id, attempt, model, input_tokens, cache_read, cache_write, "
+            "output_tokens, cost_usd, turns, duration_ms, outcome, created) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
+            (event_id, attempt, u.get("model"), int(u.get("input_tokens", 0)), int(u.get("cache_read", 0)),
+             int(u.get("cache_write", 0)), int(u.get("output_tokens", 0)), float(u.get("cost_usd", 0)),
+             int(u.get("turns", 0)), int(u.get("duration_ms", 0)), outcome, created or time.time()))
+
+    def usage_rows(self, event_id: str | None = None) -> list[sqlite3.Row]:
+        if event_id is None:
+            return self.conn.execute("SELECT * FROM edit_usage ORDER BY created").fetchall()
+        return self.conn.execute("SELECT * FROM edit_usage WHERE event_id=? ORDER BY created",
+                                 (event_id,)).fetchall()
+
+    def skip(self, event_id: str, stage: str, note: str = "skipped by you") -> int:
+        """Mark a waiting or failed job as skipped. A running job is left alone."""
+        cur = self.conn.execute(
+            "UPDATE jobs SET status='skipped', note=?, lease_until=NULL, updated=? "
+            "WHERE event_id=? AND stage=? AND status IN ('pending','failed','manual')",
+            (note, time.time(), event_id, stage))
+        return cur.rowcount
+
+    def open_stage(self, event_id: str) -> str | None:
+        """The stage a clip is currently stuck or waiting in (pending, failed or manual), if any."""
+        for stage in STAGES:
+            row = self.conn.execute("SELECT status FROM jobs WHERE event_id=? AND stage=?",
+                                    (event_id, stage)).fetchone()
+            if row and row["status"] in ("pending", "failed", "manual"):
+                return stage
+        return None
 
     def job(self, event_id: str, stage: str) -> sqlite3.Row | None:
         return self.conn.execute("SELECT * FROM jobs WHERE event_id=? AND stage=?",

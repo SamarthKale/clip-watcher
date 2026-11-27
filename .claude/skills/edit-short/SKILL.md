@@ -53,7 +53,7 @@ a `C:/...` path inside an ffmpeg filter string gets mangled.
 |---|---|
 | `python -m clipwatcher.editkit library [--type sfx\|music] [--tag comedy]` | licensed sounds you may use |
 | `python -m clipwatcher.editkit trimgraph --segments A-B,C-D` | ffmpeg trim/concat graph for your keep-list, producing `[vcut]` |
-| `python -m clipwatcher.editkit captions --words <words.json> --segments ... --out work/captions.ass --emphasis word1,word2 [--replace wrong=right] [--style karaoke\|pop\|clean] [--accent #FFD400] [--y 1250] [--max-words 3] [--font "Arial Black"]` | animated captions, word-highlighted, remapped onto your cut |
+| `python -m clipwatcher.editkit captions --words <words.json> --segments ... --out work/captions.ass --emphasis word1,word2 [--replace wrong=right] [--style karaoke\|pop\|clean] [--accent #FFD400] [--y 1250] [--max-words 3] [--romanized work/romanized.json] [--font "Arial Black"]` | animated captions, word-highlighted, remapped onto your cut |
 | `python -m clipwatcher.editkit audiomix --source <raw clip> --segments ... --out work/mix.wav [--music music/<id>] [--music-gain -14] [--music-mute A-B] [--sfx sfx/<id>@T[:gainDb]]...` | cleaned voice, ducked music bed and timed effects, normalized to -14 LUFS |
 | `python -m clipwatcher.editkit inspect short.mp4 --sheet work/inspect.jpg` | decode check, loudness, true peak, black, frozen and silent spans, contact sheet |
 | `python -m clipwatcher.editkit signals <raw clip>` | audio peaks, silences, scene changes, chat categories, moment guess, triage score |
@@ -149,6 +149,13 @@ it and it proves the moment.
 ## 5. Captions
 - Run `editkit captions` with your keep-list. Defaults: karaoke word highlight, Arial Black 88, thick
   outline, 1–3 words per card, pop-in animation.
+- **Language.** `words.json` has `language_class`: `en`, `hi` or `hinglish`. Captions are always in
+  Latin letters. English stays English. For Hindi or mixed speech, write the Hinglish spelling as people
+  type it ("bhai ye dekh", "kya baat hai", "nahi yaar"): save `work/romanized.json` (word index in
+  `words.json` -> text; only the words whose automatic `latin` spelling is wrong or odd) and pass
+  `--romanized work/romanized.json`. Never leave Devanagari in a caption; the tool transliterates
+  what you miss, but a human spelling reads better. Set `seo.language` to the class, and write the SEO
+  text in natural English or Hinglish to match how the streamer speaks.
 - **Fix transcription errors** with `--replace` (names, game terms, slang). Read every card in the
   printed report. Wrong captions kill credibility. Whisper mangles gaming vocabulary: agent and
   champion names, weapons, callouts ("A site", "heaven", "B main"), "ace", "1v3", "flash", "ult".
@@ -235,9 +242,18 @@ every problem it prints. Its warnings are judgement calls: look at each one.
   `in_recording`/`out_recording`, `duration_s`, `composition`, `captions` (style, accent, fixes),
   `effects`, `audio_assets` (library ids), `hook`, `thumbnail` (`raw_t`, `text`, `accent`,
   `cover_t`; see `references/finishing.md`), `revisions`, `rejected_alternatives`.
-- `description.txt` with 3 title options (≤ 60 chars, curiosity-driven, no clickbait lies), a 1–2
-  line description, the credit line `Streamer: <name> - https://www.twitch.tv/<channel>`, any
-  music/SFX credits `audiomix` printed, and 3–5 relevant hashtags including `#shorts`.
+- `seo` inside `edit_decisions.json`: the text that is published with the Short (the uploader reads
+  it, `finish` validates it). You have seen the clip, so write for search and for the click:
+  - `title` (≤ 100 characters): the searchable phrase first (streamer, game or topic, what happens),
+    then the hook. Curiosity, never a claim the clip doesn't show.
+  - `description` (80-4500 characters): a 2-line hook, then what happens and why it matters, any
+    music/SFX credits `audiomix` printed, and the credit line
+    `Streamer: <name> - https://www.twitch.tv/<channel>`. Natural sentences, no keyword stuffing.
+  - `hashtags`: 3 to 8, `#word` form, including `#shorts`. `tags`: search phrases (all together
+    ≤ 500 characters). `keywords`: the 3-8 phrases the title and description target.
+  - `hook_text` (≤ 60 characters): the on-screen hook. `language`: `en`, `hi` or `hinglish`.
+  - `captions`: `tiktok`, `shorts` (≤ 300 characters) and `reels`, each written for its platform.
+  `description.txt` is written from `seo` if you don't write it yourself.
 - Run the job's finish command and fix anything it reports. It renders `final/thumbnail.jpg`,
   `final/cover.jpg` and the platform files (`final/UPLOAD.txt` says what goes where). Look at the
   thumbnail: if it's weak, change `thumbnail` in your decisions and run finish again.

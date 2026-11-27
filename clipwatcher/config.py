@@ -120,8 +120,10 @@ DEFAULTS: dict[str, Any] = {
     "transcribe": {
         "enabled": True,
         "whisper_cli": "whisper-cli",
-        "model": "models/ggml-medium.en.bin",
-        "language": "en",
+        # Multilingual model: Hindi, English and Hinglish are detected per clip ("auto"). Captions are
+        # always written in Latin letters. Use ggml-base.en.bin with language "en" for English only.
+        "model": "models/ggml-large-v3-turbo-q5_0.bin",
+        "language": "auto",
         "threads": 4,
         "extra_args": [],
     },
@@ -151,6 +153,24 @@ DEFAULTS: dict[str, Any] = {
         # Short the footage allows (edits run highest triage score first). Safety and copyright
         # rejections still apply.
         "render_all": False,
+        # finish requires the SEO block (title, description, hashtags, tags, captions) in
+        # edit_decisions.json; the library step then publishes the Short for the uploader.
+        "require_seo": True,
+        # Stop retrying a clip once its Claude usage (list-price equivalent) reaches this (0 = no cap).
+        "max_spend_usd": 6.0,
+        "library": True,
+    },
+    "vod": {
+        "ytdlp": "yt-dlp",
+        "max_height": 1080,            # download at most this resolution
+        "download_timeout": 7200,      # seconds
+        "min_chat_messages": 200,      # a chat replay with fewer messages is ignored (audio is used)
+        "audio_always": False,         # also run the loudness detector when a chat replay was used
+        "watch_interval_minutes": 60,  # how often the watch list is checked while the pipeline runs
+    },
+    "library": {
+        # Where finished Shorts are published for the uploader (relative = under the project folder).
+        "dir": "Shorts",
     },
     "export": {
         # Platform files written by `finish` into <Short>/final/. The master short.mp4 is

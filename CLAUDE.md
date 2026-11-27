@@ -28,19 +28,35 @@ ffmpeg/ffprobe, whisper.cpp (`whisper-cli`) and Claude Code.
 7. `storage`: `storage.py` verifies the raw and edited clips, backs up raw clips to the external
    drive (SHA-256-verified), and deletes a recording only after all its clips are verified and
    backed up. Recordings with no clips are moved to the external drive and kept.
+8. `library.py` publishes each finished Short to `Shorts/<date>/<channel>__<live|vod>/` (video, cover,
+   thumbnail, `clips.json`, `POST.md`). `usage.py` records Claude usage per edit attempt.
+   `vod.py` (stage `vodwork`) turns VOD links and the watch list into recording sessions.
+   `cleanup.py` is the storage manager (scan, plan, run; refuses unsafe deletes).
+9. `ui.py` is the pipeline's local JSON API. `app/` (Node, React, Electron) is the desktop product: its
+   server uploads to YouTube and proxies the pipeline API; see `docs/product.md`.
 
 Queues live in SQLite (`data/clipwatcher.db`, `db.py`). Each stage has its own queue with a lease,
 retries and backoff.
 
 ## Rules
-- Never modify `data/recordings/` or `data/raw_clips/`. Never publish anything.
-- Never delete a recording or intermediate file until its clips are generated, verified and backed
-  up. All deletions go through `storage.py`, and the current editing approach is the baseline.
+- Never modify `data/recordings/` or `data/raw_clips/` outside `storage.py`.
+- Publishing happens only through the upload module in `app/` (`src/server/youtube/`), in the mode the
+  user chose (review first, or auto-publish). Nothing else in the codebase uploads or posts anything.
+- Never delete a recording, raw clip or Short until its clips are generated, verified and backed up
+  (and, for a Short, uploaded or explicitly discarded by the user). All deletions go through
+  `storage.py`, and the current editing approach is the baseline.
+- Finished Shorts are published to the library (`library.py`: `Shorts/<date>/<channel>__<live|vod>/`
+  with `clips.json` and `POST.md`). The Claude editor writes the SEO text (the `seo` block in
+  `edit_decisions.json`); `finish` validates it.
+- All text files are UTF-8; file slugs are ASCII.
 - Only use audio from `assets/library.json` with a known license.
 - Every Short keeps its attribution: streamer, channel URL, session, source timestamps and event ID.
 - Keep the stages separate. The plain 3x detector stays the default, and the audio trigger stays opt-in.
-- No new dependencies: ffmpeg, whisper.cpp and the standard library only. No paid APIs, and no
-  generated footage.
+- Python side: ffmpeg, whisper.cpp, streamlink, yt-dlp and the standard library only. The `app/` side
+  uses the Node dependencies in `app/package.json` plus Electron. Any other new dependency needs the
+  owner's approval. No paid APIs, and no generated footage.
+- Don't name a specific game or event in code, docs, defaults, commit messages or generated text unless
+  it comes from the stream itself.
 
 ## Tests
-`python -m unittest discover -s tests -v`
+`python -m unittest discover -s tests -v` and, in `app/`, `npm test` (both must pass).

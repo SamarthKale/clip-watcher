@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import re
 import subprocess
 from pathlib import Path
@@ -158,23 +159,30 @@ def keyframe_at_or_before(ffprobe: str, path: Path, t: float, search: float = 12
     fmt = json.loads(run([ffprobe, "-v", "error", "-print_format", "json", "-show_entries",
                           "format=start_time", str(path)], timeout=60).stdout)
     origin = float(fmt.get("format", {}).get("start_time") or 0)
-    lo = max(0.0, t - search)
-    out = run([ffprobe, "-v", "error", "-select_streams", "v:0", "-skip_frame", "nokey",
-               "-show_entries", "frame=pts_time", "-of", "csv=p=0",
-               "-read_intervals", f"{origin + lo:.3f}%+{search + 1:.3f}", str(path)],
-              timeout=120).stdout
-    keys = []
-    for line in out.split():
-        try:
-            keys.append(float(line.strip().strip(",")) - origin)
-        except ValueError:
-            pass
-    before = [k for k in keys if k <= t + 1e-3]
-    if before:
-        return max(0.0, max(before))
-    if t <= search:
-        return 0.0
-    raise MediaError(f"no keyframe found in {path} between {lo:.1f}s and {t:.1f}s")
+    # A stream with ad breaks cut out (streamlink skips them) has gaps in its timestamps, so a
+    # short window can be empty. Widen the search before giving up.
+    for span in (search, search * 3, search * 8):
+        lo = max(0.0, t - span)
+        out = run([ffprobe, "-v", "error", "-select_streams", "v:0", "-skip_frame", "nokey",
+                   "-show_entries", "frame=pts_time", "-of", "csv=p=0",
+                   "-read_intervals", f"{origin + lo:.3f}%+{span + 1:.3f}", str(path)],
+                  timeout=120).stdout
+        keys = []
+        for line in out.split():
+            try:
+                keys.append(float(line.strip().strip(",")) - origin)
+            except ValueError:
+                pass
+        before = [k for k in keys if k <= t + 1e-3]
+        if before:
+            return max(0.0, max(before))
+        if lo <= 0.0:
+            return 0.0
+    # Still nothing (the moment sits right after a gap): cut at t itself rather than failing the
+    # clip. The head may lose a second of picture; the clip is still made.
+    logging.getLogger("media").warning("no keyframe found in %s up to %.1fs; cutting at %.1fs",
+                                       path, t, t)
+    return max(0.0, t)
 
 
 def cut_copy_cmd(ffmpeg: str, src: Path, start: float, length: float, dst: Path) -> list[str]:

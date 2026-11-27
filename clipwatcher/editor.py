@@ -24,7 +24,7 @@ import sys
 import time
 from pathlib import Path
 
-from . import export, media, signals, thumbs
+from . import export, library, media, signals, thumbs, usage
 from .config import Config
 from .db import DB
 from .extractor import clip_dir
@@ -129,6 +129,9 @@ def prepare_job(cfg: Config, event_id: str) -> Path:
                        f"   Never under {min_len}s and never over {max_len}s; `finish` rejects anything outside.\n"
                        "   This overrides the playbook's per-type durations. Reach the length with real footage:\n"
                        "   the set-up, the moment, the reaction and the aftermath. Never pad, loop, freeze or slow down.")
+    tinfo = meta.get("transcript") or {}
+    language_line = (f"{tinfo.get('language_class', 'en')}, detected {tinfo.get('detected_language') or 'en'}"
+                     "; captions must be in Latin letters (Hinglish for Hindi speech), see the playbook")
     render_all_section = ""
     if cfg["edit"].get("render_all"):
         render_all_section = (
@@ -182,7 +185,7 @@ Follow the playbook in `{files['playbook']}` (read it first).
 {chat_lines}
 ```
 
-## Transcript
+## Transcript (language: {language_line})
 ```
 {transcript}
 ```
@@ -192,8 +195,10 @@ Follow the playbook in `{files['playbook']}` (read it first).
 2. `edit_decisions.json` - logline, moment_type, highlight_score (the rubric), beats, segments,
    in/out (clip and recording time), composition, captions, effects, audio_assets (library ids),
    hook, thumbnail ({{"raw_t", "text", "accent"}}), revisions, rejected_alternatives.
-3. `description.txt` - 3 title options, description, the credit line for {att['streamer']}
-   ({att['channel_url']}), any audio credits, and hashtags.
+3. `seo` object inside `edit_decisions.json` - the text published with the Short: title (<= 100
+   chars, searchable phrase first), description (hook, context, audio credits and the credit line for
+   {att['streamer']} {att['channel_url']}), hashtags (3-8), tags, keywords, hook_text (<= 60 chars),
+   language, captions {{tiktok, shorts, reels}}. The playbook section 10 gives the exact rules.
 Use `{files['work_dir']}/` for intermediate files.
 
 When done, run `{job['finish_command']}` and fix anything it reports. It also renders the
@@ -304,14 +309,6 @@ def finish(cfg: Config, db: DB | None, event_id: str) -> list[str]:
         p2, w2 = _qa_rules(info)
         problems += p2
         warnings += w2
-    desc_text = ""
-    desc = sdir / "description.txt"
-    if not desc.exists():
-        problems.append("missing description.txt")
-    else:
-        desc_text = desc.read_text(encoding="utf-8", errors="replace")
-        if att["channel_url"].split("//", 1)[1] not in desc_text:
-            problems.append(f"description.txt must link {att['channel_url']}")
     decisions = sdir / "edit_decisions.json"
     dec: dict = {}
     if not decisions.exists():
@@ -321,6 +318,19 @@ def finish(cfg: Config, db: DB | None, event_id: str) -> list[str]:
             dec = json.loads(decisions.read_text(encoding="utf-8"))
         except ValueError as e:
             problems.append(f"edit_decisions.json is not valid JSON: {e}")
+    desc = sdir / "description.txt"
+    if cfg["edit"].get("require_seo", True) and decisions.exists() and isinstance(dec, dict):
+        seo_bad = library.seo_problems(dec.get("seo"), att["channel_url"])
+        problems += seo_bad
+        if not seo_bad and not desc.exists():
+            desc.write_text(library.description_txt(dec["seo"]), encoding="utf-8")
+    desc_text = ""
+    if not desc.exists():
+        problems.append("missing description.txt")
+    else:
+        desc_text = desc.read_text(encoding="utf-8", errors="replace")
+        if att["channel_url"].split("//", 1)[1] not in desc_text:
+            problems.append(f"description.txt must link {att['channel_url']}")
     audio_used = []
     if isinstance(dec, dict):
         lib_items = {it["id"]: it for it in usable_items(load_library())}
@@ -364,6 +374,11 @@ def finish(cfg: Config, db: DB | None, event_id: str) -> list[str]:
             if row is not None and row["status"] != "done":
                 db.complete(row["id"], {"short": str(short)}, status="done", note="finished",
                             next_stage="archive")
+        if cfg["edit"].get("library", True):
+            try:
+                library.publish(cfg, db, event_id)  # a library problem never loses a finished edit
+            except (OSError, ValueError, KeyError) as e:
+                logging.getLogger("edit").warning("library publish of %s failed: %s", event_id, e)
     return problems
 
 
@@ -480,6 +495,9 @@ def handle(cfg: Config, db: DB, job) -> Done | Skip:
 
     if which(cfg["edit"]["claude"]) is None:
         raise RuntimeError("Claude Code CLI not found; install it or set edit.mode = \"manual\"")
+    cap = float(cfg["edit"].get("max_spend_usd") or 0)
+    if cap and usage.spent_usd(db, event_id) >= cap:
+        return Skip(f"spend cap reached (${usage.spent_usd(db, event_id):.2f} of ${cap:.2f}); raise edit.max_spend_usd to allow more")
     prompt = (f"Read {_rel(cfg, jdir / 'EDIT_JOB.md')} and carry out that editing job completely, "
               f"following {_rel(cfg, PLAYBOOK_PATH)}. Inspect your render before finishing.")
     log.info("handing %s to Claude Code", event_id)
@@ -495,9 +513,13 @@ def handle(cfg: Config, db: DB, job) -> Done | Skip:
     (jdir / "claude_run.json").write_text(proc.stdout or "", encoding="utf-8")
     if proc.stderr:
         (jdir / "claude_run.stderr.txt").write_text(proc.stderr, encoding="utf-8")
+    usage.save_attempt_file(jdir, job["attempts"], proc.stdout, proc.stderr)
     problems = finish(cfg, None, event_id)
+    was_rejected = not problems and rejected(cfg, event_id)
+    usage.record_attempt(db, event_id, job["attempts"],
+                         "invalid" if problems else "rejected" if was_rejected else "done", proc.stdout)
     if problems:
         raise RuntimeError(f"Claude exited {proc.returncode}; output not valid: " + "; ".join(problems))
-    if rejected(cfg, event_id):
+    if was_rejected:
         return Done({}, status="rejected", note="editor rejected the clip")
     return Done({"short": str(short_dir(cfg, event_id) / "short.mp4")})

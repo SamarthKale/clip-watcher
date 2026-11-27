@@ -82,3 +82,10 @@ thumbnail = true             # thumbnail.jpg 1280x720 + cover.jpg 1080x1920
 [queue]
 max_attempts = 4
 lease_seconds = 900
+
+[vod]                        # finished-stream links and the watch list (YouTube / Kick / Twitch)
+ytdlp = "yt-dlp"             # path to yt-dlp
+max_height = 1080
+min_chat_messages = 200      # a chat replay with fewer messages is ignored (the loudness detector is used)
+audio_always = false         # also run the loudness detector when a chat replay was used
+watch_interval_minutes = 60
