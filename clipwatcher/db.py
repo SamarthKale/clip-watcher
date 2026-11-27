@@ -85,6 +85,7 @@ CREATE TABLE IF NOT EXISTS vod_jobs (
     source     TEXT NOT NULL DEFAULT 'manual',   -- manual | watch:<platform>:<channel>
     session_id TEXT,
     events     INTEGER NOT NULL DEFAULT 0,
+    max_shorts INTEGER NOT NULL DEFAULT 5,    -- at most this many Shorts from the link (1-20)
     note       TEXT,
     error      TEXT,
     created    REAL NOT NULL,
@@ -129,6 +130,9 @@ class DB:
             self.conn.execute("ALTER TABLE sessions ADD COLUMN platform TEXT NOT NULL DEFAULT 'twitch'")
         if "channel_url" not in cols:  # migration: the streamer's channel link for attribution
             self.conn.execute("ALTER TABLE sessions ADD COLUMN channel_url TEXT")
+        vcols = {r["name"] for r in self.conn.execute("PRAGMA table_info(vod_jobs)")}
+        if "max_shorts" not in vcols:  # migration: Shorts per link (1.1)
+            self.conn.execute("ALTER TABLE vod_jobs ADD COLUMN max_shorts INTEGER NOT NULL DEFAULT 5")
 
     def close(self) -> None:
         self.conn.close()

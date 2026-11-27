@@ -132,8 +132,13 @@ retries on a clip that keeps failing.
 - Hinglish transcription runs on the CPU here: about 45 s per minute of audio with the large model.
   A speech-to-text line that Whisper writes in the wrong script is repaired by the transliteration, not
   perfected; read the first few captions of a new streamer.
-- Twitch and Kick VODs have no chat replay, so their spikes come from loud moments; YouTube streams use
-  their chat replay.
+- Video links: a YouTube stream with a chat replay is clipped where chat spiked. Everything else (Twitch
+  and Kick VODs, ordinary uploads, podcasts, other sites) goes to the scout: the whole video is
+  transcribed with a fast multilingual model and Claude picks the moments, so a long video takes a
+  while and one extra Claude call. If there's no speech or Claude can't answer, loud moments are used.
+- "Follow the speaker" framing works out who is talking from the picture and the transcript; there is
+  no speaker-recognition model, so with two people in one wide shot it can sometimes stay on the
+  wrong face for a moment.
 - Not done yet (needed before giving the app to other creators): a Windows installer, bundling Python
   and the external tools, a first-run download wizard, code signing, and the Google OAuth verification
   and YouTube API compliance audit (without it, a project is limited to roughly 6 uploads a day and

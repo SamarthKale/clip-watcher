@@ -57,22 +57,51 @@ class Runner:
     def owned_running(self) -> bool:
         return self.proc is not None and self.proc.poll() is None
 
+    @property
+    def mode(self) -> str | None:
+        """"live" (watching a channel, links included), "links" (video links only) or None."""
+        if not self.owned_running():
+            return None
+        return "live" if self.channel else "links"
+
     def start(self, channel: str) -> str:
+        """Watch a channel. A links-only run is replaced (the full run works links too)."""
         with self.lock:
             if self.owned_running():
-                return f"already running for {self.channel}"
-            self.cfg.path("logs").mkdir(parents=True, exist_ok=True)
-            out = open(self.log_path, "ab")
-            flags = subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0
-            env = dict(os.environ)
-            env["PYTHONPATH"] = os.pathsep.join(
-                p for p in (str(Path(__file__).resolve().parent.parent), env.get("PYTHONPATH")) if p)
-            self.proc = subprocess.Popen(
-                [sys.executable, "-m", "clipwatcher", "run", "--config", self.config_path,
-                 "--channel", channel], cwd=str(self.cfg.root), env=env, stdout=out,
-                stderr=subprocess.STDOUT, creationflags=flags)
-            self.channel, self.started = channel, time.time()
-            return "started"
+                if self.channel:
+                    return f"already running for {self.channel}"
+                self._stop_and_wait()
+            return self._spawn(["--channel", channel], channel)
+
+    def start_links(self) -> str:
+        """Work queued video links without watching a channel. No-op while anything runs."""
+        with self.lock:
+            if self.owned_running():
+                return f"already running for {self.channel}" if self.channel else "already working links"
+            return self._spawn(["--links-only"], "")
+
+    def _spawn(self, args: list[str], channel: str) -> str:
+        self.cfg.path("logs").mkdir(parents=True, exist_ok=True)
+        out = open(self.log_path, "ab")
+        flags = subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0
+        env = dict(os.environ)
+        env["PYTHONPATH"] = os.pathsep.join(
+            p for p in (str(Path(__file__).resolve().parent.parent), env.get("PYTHONPATH")) if p)
+        self.proc = subprocess.Popen(
+            [sys.executable, "-m", "clipwatcher", "run", "--config", self.config_path, *args],
+            cwd=str(self.cfg.root), env=env, stdout=out, stderr=subprocess.STDOUT, creationflags=flags)
+        self.channel, self.started = channel, time.time()
+        return "started"
+
+    def _stop_and_wait(self, timeout: float = 45) -> None:
+        p = self.proc
+        if p is None or p.poll() is not None:
+            return
+        try:
+            p.send_signal(signal.CTRL_BREAK_EVENT if os.name == "nt" else signal.SIGTERM)
+            p.wait(timeout=timeout)
+        except Exception:  # noqa: BLE001
+            p.kill()
 
     def stop(self) -> str:
         with self.lock:
@@ -163,10 +192,53 @@ class Dashboard:
         if log is not None and log.exists():
             age = time.time() - log.stat().st_mtime
         up = bool(self.runner.owned_running() or (age is not None and age < FRESH_SECONDS))
-        return {"running": up, "owned": self.runner.owned_running(),
-                "channel": self.runner.channel if self.runner.owned_running() else channel,
-                "since": self.runner.started if self.runner.owned_running() else None,
-                "chat_age": age}
+        owned = self.runner.owned_running()
+        return {"running": up, "owned": owned,
+                "channel": self.runner.channel if owned else channel,
+                "since": getattr(self.runner, "started", None) if owned else None,
+                "chat_age": age,
+                "mode": ("live" if self.runner.channel else "links") if owned else None}
+
+    # -------------------------------------------------------------- links
+    def add_links(self, text: str, max_shorts=None) -> dict:
+        """Queue pasted links and start working them if nothing is running yet."""
+        from . import vod
+        links = [t for t in re.split(r"[\s,]+", text or "") if t]
+        if not links:
+            return {"ok": False, "message": "Paste at least one link."}
+        db = self.db()
+        try:
+            out = []
+            for link in links[:20]:
+                try:
+                    jid, new = vod.add_job(db, link, max_shorts=vod.clamp_shorts(max_shorts))
+                    out.append({"url": link, "job": jid, "queued": new})
+                except vod.VodError as e:
+                    out.append({"url": link, "error": str(e)})
+        finally:
+            db.close()
+        good = sum(1 for o in out if "error" not in o)
+        if not good:
+            return {"ok": False, "results": out, "message": out[0].get("error", "No link could be queued")}
+        message = f"{good} link(s) queued"
+        if not self.runner.owned_running():
+            self.runner.start_links()
+            message += " - started working on them"
+        return {"ok": True, "results": out, "message": message}
+
+    def resume_links(self) -> bool:
+        """When the app opens: links left waiting are worked again without anyone pressing Start."""
+        db = self.db()
+        try:
+            # 'running' too: a job cut off when the app closed is picked up again by the vod stage
+            waiting = db.conn.execute("SELECT COUNT(*) AS n FROM vod_jobs WHERE status IN ('pending', 'running')"
+                                      ).fetchone()["n"]
+        finally:
+            db.close()
+        if not waiting or self.runner.owned_running():
+            return False
+        self.runner.start_links()
+        return True
 
     def shorts(self, limit: int = 60) -> list[dict]:
         from .storage import edited_root
@@ -434,20 +506,7 @@ class Handler(BaseHTTPRequestHandler):
         db = self.dash.db()
         try:
             if url == "/api/vod/add":
-                text = str(body.get("url", ""))
-                links = [t for t in re.split(r"[\s,]+", text) if t]
-                if not links:
-                    return {"ok": False, "message": "Paste at least one link."}
-                out = []
-                for link in links[:20]:
-                    try:
-                        jid, new = vod.add_job(db, link)
-                        out.append({"url": link, "job": jid, "queued": new})
-                    except vod.VodError as e:
-                        out.append({"url": link, "error": str(e)})
-                good = sum(1 for o in out if "error" not in o)
-                return {"ok": good > 0, "results": out,
-                        "message": f"{good} link(s) queued" if good else out[0].get("error", "No link could be queued")}
+                return self.dash.add_links(str(body.get("url", "")), body.get("shorts"))
             if url == "/api/vod/retry":
                 n = db.conn.execute("UPDATE vod_jobs SET status='pending', attempts=0, error=NULL, updated=? "
                                     "WHERE id=? AND status='failed'", (time.time(), int(body.get("id", 0)))).rowcount
@@ -620,6 +679,13 @@ def serve(cfg: Config, config_path: str, port: int = 8765, open_browser: bool = 
           flush=True)
     if open_browser:
         threading.Timer(0.6, lambda: webbrowser.open(url)).start()
+
+    def _resume():
+        try:
+            dash.resume_links()
+        except Exception as e:  # noqa: BLE001 - never stop the dashboard over this
+            print(f"could not resume queued links: {e}", flush=True)
+    threading.Timer(1.0, _resume).start()
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:

@@ -168,6 +168,18 @@ DEFAULTS: dict[str, Any] = {
         "audio_always": False,         # also run the loudness detector when a chat replay was used
         "watch_interval_minutes": 60,  # how often the watch list is checked while the pipeline runs
     },
+    "scout": {
+        # Videos with no usable chat (ordinary uploads, podcasts, most VODs): transcribe the whole
+        # video with a fast multilingual model, then Claude Code picks the best moments from it.
+        "enabled": True,
+        "model": "models/ggml-base.bin",
+        "language": "auto",
+        "threads": 4,
+        "timeout_seconds": 900,     # one Claude call
+        "max_chars": 120000,        # transcript characters per Claude call; longer videos are read in parts
+        "min_seconds": 15,
+        "max_seconds": 90,
+    },
     "library": {
         # Where finished Shorts are published for the uploader (relative = under the project folder).
         "dir": "Shorts",

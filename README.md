@@ -32,12 +32,17 @@ English speech model. Your own Python or Node install doesn't matter.
    official installer, and **Sign in to Claude** signs you in with your own Claude account. Claude
    Code itself isn't included in the installer: Anthropic doesn't license it for repackaging, and
    each user signs in with their own account.
-4. Connect YouTube under **YouTube account**, then paste a Twitch channel on Home.
+4. Connect YouTube under **YouTube account** (the page walks you through making the Google client).
+5. Paste a Twitch channel on Home to clip it live, or paste **any video link** under **Add a video**: a
+   finished stream, a podcast, any YouTube upload or most other video sites. Spikecut starts on a link
+   by itself, finds its best moments (chat spikes when there's a chat replay, otherwise the whole
+   video is transcribed and Claude picks them) and edits up to the number of Shorts you choose.
 
 Uninstalling (Settings -> Apps) removes the program and leaves your work folder alone.
 
 To build the installer yourself: `cd app`, then `npm run dist` (Windows; needs this repo's `tools/`
-and `models/ggml-base.en.bin`, Python 3.13 and Node). The installer lands in `app/out/`.
+and Python 3.13 and Node; the multilingual speech models come from `models/` or are downloaded).
+The installer lands in `app/out/`.
 
 ## Features
 

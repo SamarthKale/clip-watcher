@@ -32,6 +32,8 @@ def build_parser() -> argparse.ArgumentParser:
     _common(p)
     p.add_argument("--for", dest="duration", type=float, default=0,
                    help="stop gracefully after this many seconds (default: run until Ctrl+C)")
+    p.add_argument("--links-only", action="store_true",
+                   help="work only video links (download, find moments, cut, edit); no channel needed")
     for name, help_ in [
         ("record", "STEP 1: record the channel with streamlink"),
         ("chat", "STEP 2: read Twitch chat into chat.log"),
@@ -82,11 +84,29 @@ def build_parser() -> argparse.ArgumentParser:
     return ap
 
 
+LINK_STAGES = ("extract", "transcribe", "edit", "storage", "vodwork")
+
+
+def needs_channel(args) -> bool:
+    """Live stages need a Twitch channel; a links-only run doesn't."""
+    if args.cmd == "run":
+        return not getattr(args, "links_only", False)
+    return args.cmd in ("record", "chat", "detect", "audiodetect")
+
+
+def stages_for(cfg, links_only: bool = False) -> list[str]:
+    stages = list(LINK_STAGES if links_only else STAGE_PROCESSES)
+    if not cfg["transcribe"]["enabled"] and "transcribe" in stages:
+        stages.remove("transcribe")
+    if not cfg["detect"]["audio"]["enabled"] and "audiodetect" in stages:  # optional second trigger
+        stages.remove("audiodetect")
+    return stages
+
+
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    needs_channel = args.cmd in ("run", "record", "chat", "detect", "audiodetect")
     try:
-        cfg = load_config(args.config, {"channel": args.channel}, require_channel=needs_channel)
+        cfg = load_config(args.config, {"channel": args.channel}, require_channel=needs_channel(args))
     except (ValueError, FileNotFoundError) as e:
         raise SystemExit(f"clipwatcher: {e}")
     setup_logging(args.cmd, cfg.path("logs") if args.cmd in STAGE_PROCESSES else None, args.verbose)
@@ -157,14 +177,12 @@ def cmd_run(cfg, db, args):
     problems = _check(cfg, quiet=True)
     for p in problems:
         log.warning("%s", p)
-    stages = list(STAGE_PROCESSES)
-    if not cfg["transcribe"]["enabled"]:
-        stages.remove("transcribe")
-    if not cfg["detect"]["audio"]["enabled"]:  # optional second trigger, off by default
-        stages.remove("audiodetect")
+    links_only = bool(getattr(args, "links_only", False))
+    stages = stages_for(cfg, links_only)
     base = [sys.executable, "-m", "clipwatcher"]
     config_arg = str(Path(args.config).resolve())
-    extra = ["--config", config_arg, "--channel", cfg.channel] + (["-v"] if args.verbose else [])
+    extra = ["--config", config_arg] + (["--channel", cfg.channel] if cfg.channel else []) + \
+        (["-v"] if args.verbose else [])
     # Children run from the config's folder; make sure they can import this package
     # even when it isn't pip-installed.
     pkg_parent = str(Path(__file__).resolve().parent.parent)
@@ -173,7 +191,10 @@ def cmd_run(cfg, db, args):
     procs: dict[str, subprocess.Popen] = {}
     restarts: dict[str, float] = {s: 0.0 for s in stages}
     backoff: dict[str, float] = {s: 2.0 for s in stages}
-    log.info("Clip Watcher running for twitch.tv/%s - Ctrl+C to stop", cfg.channel)
+    if links_only:
+        log.info("Spikecut working video links (%s) - Ctrl+C to stop", ", ".join(stages))
+    else:
+        log.info("Clip Watcher running for twitch.tv/%s - Ctrl+C to stop", cfg.channel)
     if args.duration:
         threading.Timer(args.duration, STOP.set).start()
     # On Windows each stage gets its own process group so it can be stopped with

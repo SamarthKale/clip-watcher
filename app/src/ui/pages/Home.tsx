@@ -170,6 +170,9 @@ export function Home() {
   };
 
   const p = st?.pipeline;
+  // A run working only video links isn't watching a channel: the channel box stays usable.
+  const linksOnly = p?.owned && p.mode === 'links';
+  const watching = p?.owned && !linksOnly;
   return (
     <div>
       <PageHeader title="Home" subtitle={st?.channel ? (st.live ? `Recording ${st.channel} since ${fmtClock(st.live_since)}.` : `Channel: ${st.channel}.`) + ` ${st.stats.shorts_total} Shorts made in total.` : 'Paste a Twitch channel and press Start watching.'} />
@@ -193,14 +196,15 @@ export function Home() {
           <input
             className="min-w-60 flex-1 rounded-xl border border-zinc-300 bg-white/70 px-4 py-2.5 text-sm outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/15 dark:border-zinc-700"
             placeholder="https://www.twitch.tv/name or just the channel name"
-            value={input} onChange={(e) => setInput(e.target.value)} disabled={!!p?.owned}
+            value={input} onChange={(e) => setInput(e.target.value)} disabled={!!watching}
             onKeyDown={(e) => { if (e.key === 'Enter') void start(); }} aria-label="Twitch channel"
           />
-          {p?.owned ? <Button variant="danger" className="!px-4 !py-2.5" onClick={stop} disabled={busy}>Stop</Button> : <Button variant="primary" className="!px-4 !py-2.5" onClick={start} disabled={busy}><Icon name="play" className="h-3.5 w-3.5" />Start watching</Button>}
+          {watching ? <Button variant="danger" className="!px-4 !py-2.5" onClick={stop} disabled={busy}>Stop</Button> : <Button variant="primary" className="!px-4 !py-2.5" onClick={start} disabled={busy}><Icon name="play" className="h-3.5 w-3.5" />Start watching</Button>}
         </div>
         <div className="mt-3 flex flex-wrap items-center gap-2">
-          <Chip tone={p?.running ? 'ok' : 'wait'} pulse={p?.running}>{p?.running ? 'Pipeline running' : 'Pipeline off'}</Chip>
-          <Chip tone={st?.live ? 'live' : 'wait'} pulse={st?.live}>{st?.live ? 'Live and recording' : p?.running ? 'Waiting for the stream' : 'Offline'}</Chip>
+          <Chip tone={p?.running ? 'ok' : 'wait'} pulse={p?.running}>{linksOnly ? 'Working on video links' : p?.running ? 'Pipeline running' : 'Pipeline off'}</Chip>
+          {!linksOnly && <Chip tone={st?.live ? 'live' : 'wait'} pulse={st?.live}>{st?.live ? 'Live and recording' : p?.running ? 'Waiting for the stream' : 'Offline'}</Chip>}
+          {linksOnly && <span className="text-xs text-zinc-500">Starting a channel here keeps working your links.</span>}
           {p?.running && !p.owned && <span className="text-xs text-zinc-500">Started outside this window. Stop it with Ctrl+C where it runs.</span>}
         </div>
       </Card>

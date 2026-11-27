@@ -477,6 +477,35 @@ def cmd_track(a) -> None:
     print(f'use: editkit reframe --source {a.source} crop --zoom {a.zoom} --x-expr "{expr}"')
 
 
+def parse_speaker_keys(text: str) -> list[tuple[float, float]]:
+    """"t:centre,..." (OUTPUT seconds, centre of the speaker as a fraction of the width) -> sorted keys."""
+    keys = []
+    for part in [p.strip() for p in (text or "").split(",") if p.strip()]:
+        t, _, c = part.partition(":")
+        try:
+            keys.append((max(0.0, float(t)), max(0.0, min(1.0, float(c)))))
+        except ValueError as e:
+            raise ValueError(f"bad speaker key {part!r}: use t:centre, e.g. 6.5:0.72") from e
+    if not keys:
+        raise ValueError("no speaker keys given")
+    keys.sort()
+    keys[0] = (0.0, keys[0][1])
+    return reframe.dedupe_keys(keys)
+
+
+def cmd_speakerpath(a) -> None:
+    if a.size:
+        sw, sh = (int(v) for v in a.size.lower().split("x"))
+    else:
+        _, _, fp = _tools()
+        sw, sh = _size(fp, a.source)
+    keys = parse_speaker_keys(a.keys)
+    win = reframe._fit_crop(sw, sh, reframe.OUT_W / reframe.OUT_H, zoom=a.zoom)
+    expr = reframe.x_expression(keys, sw, win.w, ease=a.ease)
+    print(f"{len(keys)} speaker keyframes (OUTPUT seconds, centre as fraction of width): {keys}")
+    print(f'use: editkit reframe --source {a.source or "<raw clip>"} crop --zoom {a.zoom} --x-expr "{expr}"')
+
+
 def snap_segments(segs, words, max_shift: float = 0.35, pad: float = 0.04) -> tuple[list, list[str]]:
     """Move segment edges off words: starts go to the start of the word they cut into,
     ends to the end of the word they cut into (within max_shift), never overlapping."""
@@ -607,6 +636,12 @@ def main(argv=None) -> None:
     tr.add_argument("--deadband", type=float, default=0.08, help="ignore moves smaller than this (fraction)")
     tr.add_argument("--ease", type=float, default=0.4, help="seconds per move; 0 = hard cuts")
     tr.add_argument("--out")
+    sp = sub.add_parser("speakerpath", help="speaker turns -> crop-X expression (follow whoever is talking)")
+    sp.add_argument("--source", help="raw clip (for its size); or give --size")
+    sp.add_argument("--size", help="source size WxH, e.g. 1920x1080")
+    sp.add_argument("--keys", required=True, help="t:centre,... in OUTPUT seconds, e.g. 0:0.3,6.5:0.72")
+    sp.add_argument("--zoom", type=float, default=1.0)
+    sp.add_argument("--ease", type=float, default=0.25, help="seconds per move; 0 = hard cuts")
     sn = sub.add_parser("snap", help="snap keep-list edges to word boundaries")
     sn.add_argument("--words", required=True)
     sn.add_argument("--segments", required=True)
@@ -625,7 +660,7 @@ def main(argv=None) -> None:
     a = ap.parse_args(argv)
     {"captions": cmd_captions, "audiomix": cmd_audiomix, "trimgraph": cmd_trimgraph,
      "inspect": cmd_inspect, "library": cmd_library, "signals": cmd_signals, "timeline": cmd_timeline,
-     "grid": cmd_grid, "reframe": cmd_reframe, "track": cmd_track, "snap": cmd_snap,
+     "grid": cmd_grid, "reframe": cmd_reframe, "track": cmd_track, "speakerpath": cmd_speakerpath, "snap": cmd_snap,
      "thumbnail": cmd_thumbnail}[a.cmd](a)
 
 

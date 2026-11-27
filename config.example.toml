@@ -59,8 +59,8 @@ scene_detect = true
 [transcribe]                 # STEP 5 - whisper.cpp
 enabled = true
 whisper_cli = "whisper-cli"
-model = "models/ggml-medium.en.bin"
-language = "en"
+model = "models/ggml-large-v3-turbo-q5_0.bin"   # multilingual; "models/ggml-base.en.bin" + "en" for English only
+language = "auto"            # Hindi, English, Hinglish... detected per clip; captions stay in Latin letters
 threads = 4
 
 [edit]                       # STEP 6 - Claude Code
@@ -83,9 +83,19 @@ thumbnail = true             # thumbnail.jpg 1280x720 + cover.jpg 1080x1920
 max_attempts = 4
 lease_seconds = 900
 
-[vod]                        # finished-stream links and the watch list (YouTube / Kick / Twitch)
+[vod]                        # video links (any site yt-dlp supports) and the watch list (YouTube / Kick / Twitch)
 ytdlp = "yt-dlp"             # path to yt-dlp
 max_height = 1080
-min_chat_messages = 200      # a chat replay with fewer messages is ignored (the loudness detector is used)
+min_chat_messages = 200      # a chat replay with fewer messages is ignored (the scout is used)
 audio_always = false         # also run the loudness detector when a chat replay was used
 watch_interval_minutes = 60
+
+[scout]                      # videos with no usable chat: ordinary uploads, podcasts, most VODs
+enabled = true               # transcribe the whole video, then Claude Code picks the best moments
+model = "models/ggml-base.bin"   # fast multilingual model, used only to read whole videos
+language = "auto"
+threads = 4
+timeout_seconds = 900        # one Claude call
+max_chars = 120000           # transcript characters per Claude call; longer videos are read in parts
+min_seconds = 15             # each moment is 15-90 s; the editor tightens it
+max_seconds = 90

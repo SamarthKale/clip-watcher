@@ -1,6 +1,6 @@
 ---
 name: edit-short
-description: Edit a Clip Watcher raw Twitch/gaming livestream clip into a finished, high-retention vertical Short (YouTube Shorts, TikTok, Reels) - find the real moment (kills, aces, clutches, fails, funny reactions) from chat/audio/scene signals, reframe 16:9 gameplay + facecam to 9:16, caption, sound-design, thumbnail and QA it. Use when asked to process the editing queue, edit a clip, or when an EDIT_JOB.md under data/jobs/ is referenced.
+description: Edit a Clip Watcher raw clip into a finished, high-retention vertical Short (YouTube Shorts, TikTok, Reels) - from a Twitch/gaming livestream (kills, aces, clutches, fails, funny reactions) or from any other video (podcasts, talking videos, vlogs) - find the real moment from chat/audio/scene/scout signals, reframe 16:9 to 9:16 (gameplay + facecam, or follow the speaker), caption, sound-design, thumbnail and QA it. Use when asked to process the editing queue, edit a clip, or when an EDIT_JOB.md under data/jobs/ is referenced.
 ---
 
 # Clip Watcher: Shorts editor
@@ -21,6 +21,13 @@ each one when you reach its step:
 | `references/highlight-analysis.md` | step 1: signals, gaming moment taxonomy (kill, multi-kill, ace, clutch, fail...), the scoring rubric, in and out points |
 | `references/gaming-reframe.md` | step 4: measuring the facecam and HUD, stack / fullcam / crop / blurfill, action tracking, HUD insets, safe zones |
 | `references/finishing.md` | steps 7 and 9–10: voice enhancement, thumbnail and cover, platform files, every check `finish` runs |
+| `references/talking-video.md` | podcasts, interviews, commentary, vlogs (no gameplay): moments, follow-the-speaker framing, captions, sound |
+
+**Gameplay or talking?** Look at the first frames before step 1. Gameplay (a game on screen, often
+with a facecam) follows this playbook as written. People talking (a podcast, an interview, a
+vlog, a talk) follows `references/talking-video.md` for steps 1, 4, 5 and 7; every other step and
+every hard rule still applies. A moment the **scout** picked (EDIT_JOB says so) was chosen from
+the whole transcript on purpose: tighten it, don't re-litigate it.
 
 ## 0. Pick the job
 - Given a job: read `EDIT_JOB.md` (its path is in your prompt). It lists every input path and the

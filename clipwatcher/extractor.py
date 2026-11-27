@@ -67,6 +67,21 @@ def plan_window(spike_ts: float, chat_offset: float, start_wall: float, pre: flo
     return moment, start, end
 
 
+def window_for(stats: dict, spike_ts: float, chat_offset: float, start_wall: float, pre: float, post: float,
+               end_wall: float | None, pad: float = 15.0) -> tuple[float, float, float]:
+    """(moment, clip_start, clip_end) from the recording start. A scout moment already knows its
+    start and end, so it is cut there with `pad` seconds either side; spikes use pre/post."""
+    w = stats.get("window") if stats.get("source") == "scout" else None
+    if not w:
+        return plan_window(spike_ts, chat_offset, start_wall, pre, post, end_wall)
+    moment = float(w["start"])
+    start = max(0.0, moment - pad)
+    end = float(w["end"]) + pad
+    if end_wall is not None:
+        end = min(end, end_wall - start_wall)
+    return moment, start, end
+
+
 def handle(cfg: Config, db: DB, job) -> Done | Defer | Skip:
     x = cfg["extract"]
     ev = db.event(job["event_id"])
@@ -95,9 +110,9 @@ def handle(cfg: Config, db: DB, job) -> Done | Defer | Skip:
         return Skip(f"recording file missing: {recording}")
     start_wall, end_wall = sess["start_wall"], sess["end_wall"]
     still_recording = sess["status"] == "recording"
-    moment, start, end = plan_window(ev["spike_ts"], chat_offset, start_wall,
-                                     x["pre_seconds"], x["post_seconds"],
-                                     None if still_recording else end_wall)
+    moment, start, end = window_for(stats, ev["spike_ts"], chat_offset, start_wall,
+                                    x["pre_seconds"], x["post_seconds"],
+                                    None if still_recording else end_wall)
 
     # Wait until enough post-spike footage has been written to disk.
     if still_recording:
