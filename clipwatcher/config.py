@@ -151,6 +151,14 @@ DEFAULTS: dict[str, Any] = {
         # Short the footage allows (edits run highest triage score first). Safety and copyright
         # rejections still apply.
         "render_all": False,
+        # finish requires the SEO block (title, description, hashtags, tags, captions) in
+        # edit_decisions.json; the library step then publishes the Short for the uploader.
+        "require_seo": True,
+        "library": True,
+    },
+    "library": {
+        # Where finished Shorts are published for the uploader (relative = under the project folder).
+        "dir": "Shorts",
     },
     "export": {
         # Platform files written by `finish` into <Short>/final/. The master short.mp4 is

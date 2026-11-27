@@ -79,6 +79,10 @@ class DB:
         cols = {r["name"] for r in self.conn.execute("PRAGMA table_info(sessions)")}
         if "disposition" not in cols:  # migration: offloaded | archived | deleted
             self.conn.execute("ALTER TABLE sessions ADD COLUMN disposition TEXT")
+        if "kind" not in cols:  # migration: live | vod
+            self.conn.execute("ALTER TABLE sessions ADD COLUMN kind TEXT NOT NULL DEFAULT 'live'")
+        if "source_url" not in cols:  # migration: the VOD link a session was made from
+            self.conn.execute("ALTER TABLE sessions ADD COLUMN source_url TEXT")
 
     def close(self) -> None:
         self.conn.close()
@@ -105,10 +109,11 @@ class DB:
                           (key, json.dumps(value)))
 
     # ---------------------------------------------------------- sessions
-    def add_session(self, sid: str, channel: str, path: str, quality: str) -> None:
-        self.conn.execute("INSERT INTO sessions(id, channel, path, status, quality, created) "
-                          "VALUES(?, ?, ?, 'recording', ?, ?)",
-                          (sid, channel, path, quality, time.time()))
+    def add_session(self, sid: str, channel: str, path: str, quality: str,
+                    kind: str = "live", source_url: str | None = None) -> None:
+        self.conn.execute("INSERT INTO sessions(id, channel, path, status, quality, created, kind, source_url) "
+                          "VALUES(?, ?, ?, 'recording', ?, ?, ?, ?)",
+                          (sid, channel, path, quality, time.time(), kind, source_url))
 
     def set_session_start(self, sid: str, start_wall: float) -> None:
         self.conn.execute("UPDATE sessions SET start_wall=? WHERE id=?", (start_wall, sid))

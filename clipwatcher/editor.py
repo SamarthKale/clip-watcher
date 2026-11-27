@@ -24,7 +24,7 @@ import sys
 import time
 from pathlib import Path
 
-from . import export, media, signals, thumbs
+from . import export, library, media, signals, thumbs
 from .config import Config
 from .db import DB
 from .extractor import clip_dir
@@ -192,8 +192,10 @@ Follow the playbook in `{files['playbook']}` (read it first).
 2. `edit_decisions.json` - logline, moment_type, highlight_score (the rubric), beats, segments,
    in/out (clip and recording time), composition, captions, effects, audio_assets (library ids),
    hook, thumbnail ({{"raw_t", "text", "accent"}}), revisions, rejected_alternatives.
-3. `description.txt` - 3 title options, description, the credit line for {att['streamer']}
-   ({att['channel_url']}), any audio credits, and hashtags.
+3. `seo` object inside `edit_decisions.json` - the text published with the Short: title (<= 100
+   chars, searchable phrase first), description (hook, context, audio credits and the credit line for
+   {att['streamer']} {att['channel_url']}), hashtags (3-8), tags, keywords, hook_text (<= 60 chars),
+   language, captions {{tiktok, shorts, reels}}. The playbook section 10 gives the exact rules.
 Use `{files['work_dir']}/` for intermediate files.
 
 When done, run `{job['finish_command']}` and fix anything it reports. It also renders the
@@ -304,14 +306,6 @@ def finish(cfg: Config, db: DB | None, event_id: str) -> list[str]:
         p2, w2 = _qa_rules(info)
         problems += p2
         warnings += w2
-    desc_text = ""
-    desc = sdir / "description.txt"
-    if not desc.exists():
-        problems.append("missing description.txt")
-    else:
-        desc_text = desc.read_text(encoding="utf-8", errors="replace")
-        if att["channel_url"].split("//", 1)[1] not in desc_text:
-            problems.append(f"description.txt must link {att['channel_url']}")
     decisions = sdir / "edit_decisions.json"
     dec: dict = {}
     if not decisions.exists():
@@ -321,6 +315,19 @@ def finish(cfg: Config, db: DB | None, event_id: str) -> list[str]:
             dec = json.loads(decisions.read_text(encoding="utf-8"))
         except ValueError as e:
             problems.append(f"edit_decisions.json is not valid JSON: {e}")
+    desc = sdir / "description.txt"
+    if cfg["edit"].get("require_seo", True) and decisions.exists() and isinstance(dec, dict):
+        seo_bad = library.seo_problems(dec.get("seo"), att["channel_url"])
+        problems += seo_bad
+        if not seo_bad and not desc.exists():
+            desc.write_text(library.description_txt(dec["seo"]), encoding="utf-8")
+    desc_text = ""
+    if not desc.exists():
+        problems.append("missing description.txt")
+    else:
+        desc_text = desc.read_text(encoding="utf-8", errors="replace")
+        if att["channel_url"].split("//", 1)[1] not in desc_text:
+            problems.append(f"description.txt must link {att['channel_url']}")
     audio_used = []
     if isinstance(dec, dict):
         lib_items = {it["id"]: it for it in usable_items(load_library())}
@@ -364,6 +371,11 @@ def finish(cfg: Config, db: DB | None, event_id: str) -> list[str]:
             if row is not None and row["status"] != "done":
                 db.complete(row["id"], {"short": str(short)}, status="done", note="finished",
                             next_stage="archive")
+        if cfg["edit"].get("library", True):
+            try:
+                library.publish(cfg, db, event_id)  # a library problem never loses a finished edit
+            except (OSError, ValueError, KeyError) as e:
+                logging.getLogger("edit").warning("library publish of %s failed: %s", event_id, e)
     return problems
 
 

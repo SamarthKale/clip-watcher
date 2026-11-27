@@ -234,7 +234,8 @@ class FinishPipelineTests(unittest.TestCase):
         root = Path(self.tmp.name)
         self.cfg = load_config(None, {"channel": "chan", "paths": {"data_dir": str(root / "data")},
                                       "extract": {"ffmpeg": FFMPEG, "ffprobe": FFPROBE},
-                                      "storage": {"edited_dir": str(root / "edited")}})
+                                      "storage": {"edited_dir": str(root / "edited")},
+                                      "library": {"dir": str(root / "library")}})
         self.eid = "chan-1794777430"
         raw = local_clip_dir(self.cfg, self.eid)
         raw.mkdir(parents=True)
@@ -260,9 +261,16 @@ class FinishPipelineTests(unittest.TestCase):
                    "-shortest", str(self.sdir / "short.mp4")])
         (self.sdir / "description.txt").write_text("Title\nStreamer: chan - https://www.twitch.tv/chan\n",
                                                    encoding="utf-8")
-        (self.sdir / "edit_decisions.json").write_text(json.dumps({
+        self.decisions = {
             "moment_type": "ACE", "highlight_score": {"total": 70}, "audio_assets": [],
-            "thumbnail": {"raw_t": 2.0, "text": "TEST *ACE*", "cover_t": 0.5}}), encoding="utf-8")
+            "thumbnail": {"raw_t": 2.0, "text": "TEST *ACE*", "cover_t": 0.5},
+            "seo": {"title": "Chan Clutches The Ace In Ranked And Chat Explodes",
+                    "description": "Chan clutches a 1v4 ace and chat explodes in seconds.\n\n"
+                                   "Streamer: https://www.twitch.tv/chan",
+                    "hashtags": ["#shorts", "#chan", "#ace"], "tags": ["chan clips"],
+                    "keywords": ["chan ace"], "hook_text": "1v4 ACE", "language": "en",
+                    "captions": {"tiktok": "1v4 ace", "shorts": "1v4 ace", "reels": "1v4 ace"}}}
+        (self.sdir / "edit_decisions.json").write_text(json.dumps(self.decisions), encoding="utf-8")
 
     def tearDown(self):
         self.tmp.cleanup()
@@ -285,6 +293,21 @@ class FinishPipelineTests(unittest.TestCase):
         mtime = (final / "instagram_reels.mp4").stat().st_mtime
         self.assertEqual(finish(self.cfg, None, self.eid), [])
         self.assertEqual((final / "instagram_reels.mp4").stat().st_mtime, mtime)
+
+    def test_finish_publishes_to_library_and_needs_seo(self):
+        from clipwatcher.editor import finish
+        lib = Path(self.tmp.name) / "library"
+        self.assertEqual(finish(self.cfg, None, self.eid), [])
+        clips = list(lib.glob("*/chan__live/clips.json"))
+        self.assertEqual(len(clips), 1)
+        doc = json.loads(clips[0].read_text(encoding="utf-8"))
+        self.assertEqual(doc["clips"][0]["post_title"], self.decisions["seo"]["title"])
+        self.assertTrue(list(clips[0].parent.glob("01_*.mp4")))
+        # without the seo block, finish reports it and publishes nothing new
+        bad = dict(self.decisions)
+        bad.pop("seo")
+        (self.sdir / "edit_decisions.json").write_text(json.dumps(bad), encoding="utf-8")
+        self.assertTrue(any('"seo"' in p for p in finish(self.cfg, None, self.eid)))
 
     def test_black_open_fails_finish(self):
         from clipwatcher.editor import finish
