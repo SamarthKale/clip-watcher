@@ -135,3 +135,32 @@ test('add a folder, scan it, edit metadata by hand, and never expose the API key
   // The source video was never touched.
   expect(fs.readdirSync(videosDir)).toEqual(['my clip.mp4']);
 });
+
+test('the YouTube account page walks you through making a Google OAuth client', async ({ page }) => {
+  await page.goto(url);
+  const tour = page.getByRole('dialog', { name: 'Spikecut tour' });
+  if (await tour.isVisible()) await page.keyboard.press('Escape');
+  await open(page, 'accounts');
+
+  // No client saved yet: the guide is open, on step 1, with its screenshot loaded.
+  const guide = page.getByRole('region', { name: 'How to get a client ID' });
+  await expect(guide).toBeVisible();
+  await expect(guide).toContainText('Step 1 of');
+  await expect(guide.getByRole('heading', { level: 3 })).toHaveText('Create a Google Cloud project');
+  const shot = guide.getByRole('img');
+  await expect.poll(() => shot.evaluate((i: HTMLImageElement) => i.complete && i.naturalWidth)).toBeGreaterThan(0);
+
+  // Next / Back move through the steps; the last step says where the two values go.
+  await guide.getByRole('button', { name: 'Next' }).click();
+  await expect(guide).toContainText('Step 2 of');
+  await guide.getByRole('button', { name: 'Back' }).click();
+  await expect(guide).toContainText('Step 1 of');
+  await guide.getByRole('button', { name: /^Copy the client ID/ }).click();
+  await expect(guide.getByRole('heading', { level: 3 })).toHaveText('Copy the client ID and secret into Spikecut');
+  await expect(guide.getByRole('button', { name: 'Next' })).toBeDisabled();
+  await expect.poll(() => guide.getByRole('img').evaluate((i: HTMLImageElement) => i.complete && i.naturalWidth)).toBeGreaterThan(0);
+
+  // It can be folded away.
+  await page.getByRole('button', { name: 'Hide guide' }).click();
+  await expect(guide).toBeHidden();
+});
