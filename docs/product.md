@@ -4,7 +4,7 @@
 
 One app that records a stream (or takes a link to a finished one), finds the best moments, edits
 Shorts with Claude, writes the title, description and tags, and uploads them to YouTube after you
-approve them (or automatically, if you choose). It opens in a light, matte window with a hint of the desktop behind it.
+approve them (or automatically, if you choose). It opens in a light window of frosted, matte glass over a soft pastel backdrop, with the desktop showing faintly through.
 
 ## Start it
 
@@ -26,7 +26,7 @@ Needs: Node 20+, Python 3.11+, and the tools listed under Home -> "Setup needed"
 |---|---|
 | Name | Spikecut (internal names such as the `clipwatcher` package and data folders are unchanged) |
 | Mark | A chat-activity line that shoots up into a spike, cut by a diagonal slash, on a flat dusty-lavender tile with a soft rose "live" dot. Inside the app the tile follows the chosen theme. Source: `app/build/icon.svg`; `npm run icons` renders the PNG and `.ico` files. |
-| Colours | Pastel and matte. Four themes, picked in Settings -> Appearance: **Lavender** (default, `#7a6dad`), **Sage** (`#5f8269`), **Clay** (`#a2664e`), **Mist** (`#5f789b`). Soft rose for live, softened status colours, warm paper surfaces. No gradients, gloss or glow. |
+| Colours | Pastel and matte. Four themes, picked in Settings -> Appearance: **Lavender** (default, `#7a6dad`), **Sage** (`#5f8269`), **Clay** (`#a2664e`), **Mist** (`#5f789b`). Soft rose for live and softened status colours. Surfaces are frosted matte glass (translucent, blurred, a thin light edge) over a soft pastel backdrop in the theme colours. No neon, gloss or glow. |
 | Type | Segoe UI Variable (built into Windows 11) |
 | Motion | The Motion library: page transitions, staggered cards, counters, the live ripple, the drawing logo on the splash screen. All of it is off when Windows "Animation effects" is off. |
 

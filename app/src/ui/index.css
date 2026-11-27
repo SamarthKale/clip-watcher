@@ -196,9 +196,15 @@ progress {
   }
 }
 
-/* The tour card stays solid over the see-through window so its text is always crisp. */
+/* The tour card is frosted glass too, but denser than the panels so its text stays crisp. */
 .tour-card {
   background: #fffefb;
+}
+html:not(.dark) .tour-card {
+  background: rgb(255 255 255 / 0.86);
+  backdrop-filter: blur(32px) saturate(1.3);
+  -webkit-backdrop-filter: blur(32px) saturate(1.3);
+  border-color: rgb(255 255 255 / 0.75) !important;
 }
 .dark .tour-card {
   background: #18181b;
@@ -225,14 +231,73 @@ progress {
 }
 
 /* ------------------------------------------------------------------------------------------
+   Frosted matte glass (the light look, in the desktop window and in a browser).
+   Behind everything sits a soft pastel backdrop in the theme's colours. Panels are frosted glass
+   over it: translucent white, a strong blur, a thin light edge and a soft shadow. Matte means no
+   specular shine and no glow; the glass diffuses, it doesn't reflect.
+   ------------------------------------------------------------------------------------------ */
+html:not(.dark) body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(52rem 40rem at 2% -8%, var(--color-indigo-300), transparent 70%),
+    radial-gradient(44rem 34rem at 104% 6%, color-mix(in srgb, var(--color-indigo-300) 30%, rgb(236 194 178)), transparent 70%),
+    radial-gradient(54rem 40rem at 66% 112%, color-mix(in srgb, var(--color-indigo-300) 30%, rgb(176 212 199)), transparent 70%),
+    radial-gradient(36rem 28rem at 34% 58%, color-mix(in srgb, var(--color-indigo-200) 80%, transparent), transparent 70%),
+    color-mix(in srgb, var(--color-indigo-100) 55%, rgb(245 242 236));
+}
+html:not(.dark) body {
+  background-color: transparent;
+}
+html:not(.dark) .bg-white {
+  background-color: rgb(255 255 255 / 0.55);
+}
+/* keep the hover state of white buttons (this rule sits outside Tailwind's layers, so it would win) */
+html:not(.dark) .bg-white[class*='hover:bg-']:hover:not(:disabled) {
+  background-color: rgb(255 255 255 / 0.85);
+}
+/* cards, side panels and dialogs: frosted glass */
+html:not(.dark) [class*='rounded-xl'][class*='border'].bg-white,
+html:not(.dark) [class*='rounded-2xl'][class*='border'].bg-white,
+html:not(.dark) [role='dialog'].bg-white {
+  background-color: rgb(255 255 255 / 0.42);
+  backdrop-filter: blur(26px) saturate(1.3);
+  -webkit-backdrop-filter: blur(26px) saturate(1.3);
+  border-color: rgb(255 255 255 / 0.8) !important;
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.6),
+    0 0 0 1px rgb(40 36 30 / 0.04),
+    0 12px 32px -14px rgb(40 36 30 / 0.18);
+}
+html:not(.dark) [role='dialog'].bg-white {
+  background-color: rgb(255 255 255 / 0.72);
+}
+html:not(.dark) nav[aria-label='Main'] {
+  background: rgb(255 255 255 / 0.3);
+  border-color: rgb(255 255 255 / 0.6);
+}
+html:not(.dark) nav[aria-label='Main'],
+html:not(.dark) header {
+  backdrop-filter: blur(28px) saturate(1.3);
+  -webkit-backdrop-filter: blur(28px) saturate(1.3);
+}
+html:not(.dark) input:not([type='checkbox']):not([type='radio']):not([type='range']),
+html:not(.dark) textarea,
+html:not(.dark) select {
+  background-color: rgb(255 255 255 / 0.7);
+}
+
+/* ------------------------------------------------------------------------------------------
    Window mode (the desktop app). Electron opens a see-through window with Windows acrylic in its
-   light tint; a warm paper-coloured wash sits over it so the window reads as matte, with only a hint
-   of the desktop behind. Panels are flat, nearly opaque paper: no sheen, no glossy highlight.
-   A plain browser keeps the solid theme.
+   light tint. The pastel backdrop is laid over it part-transparent, so the blurred desktop shows
+   through the whole window, and the frosted panels sit on top.
    ------------------------------------------------------------------------------------------ */
 html.glass {
   color-scheme: light;
-  --color-zinc-50: rgb(250 249 246 / 0.6);
+  --color-zinc-50: rgb(255 255 255 / 0.4);
   --color-zinc-100: rgb(40 36 30 / 0.05);
   --color-zinc-200: rgb(40 36 30 / 0.08);
   --color-zinc-300: rgb(40 36 30 / 0.13);
@@ -243,39 +308,11 @@ html.glass body {
   color: #26241f;
 }
 html.glass body::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  /* warm paper, faintly tinted with the theme */
-  background: color-mix(in srgb, var(--color-indigo-50) 45%, rgb(247 245 240));
-  opacity: 0.88;
-}
-html.glass .bg-white {
-  background-color: rgb(255 254 251 / 0.94);
-}
-html.glass nav[aria-label='Main'] {
-  background: rgb(250 248 244 / 0.72);
-  border-color: rgb(40 36 30 / 0.06);
-}
-html.glass nav[aria-label='Main'],
-html.glass header {
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-}
-html.glass [class*='rounded-xl'][class*='border'],
-html.glass [class*='rounded-2xl'][class*='border'] {
-  box-shadow: 0 1px 2px rgb(40 36 30 / 0.04);
+  opacity: 0.86;
 }
 html.glass [class*='border-zinc-200'],
 html.glass [class*='border-zinc-300'] {
   border-color: rgb(40 36 30 / 0.08);
-}
-html.glass input,
-html.glass textarea,
-html.glass select {
-  background-color: rgb(255 254 251);
 }
 html.glass ::-webkit-scrollbar {
   width: 10px;

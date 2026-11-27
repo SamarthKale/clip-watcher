@@ -327,7 +327,7 @@ export function Tour({ open, onClose, onStep }: { open: boolean; onClose: (finis
           exit={{ opacity: 0 }}
         >
           <motion.div
-            className="pointer-events-auto absolute inset-0 bg-zinc-900/25 backdrop-blur-[2px]"
+            className="pointer-events-auto absolute inset-0 bg-zinc-900/20 backdrop-blur-[6px]"
             initial={false}
             animate={{ opacity: centered ? 1 : 0 }}
             style={{ pointerEvents: centered ? 'auto' : 'none' }}

@@ -37,3 +37,10 @@ chosen in Settings -> Appearance and saved as `theme` in the upload server's set
 (green, amber, red, blue) are softened to match, and the logo tile is flat and follows the theme.
 
 **Non-goals.** No page changes behaviour; no new pipeline features; no installer in this change.
+
+**Revision 2 (owner feedback: "even though matte, I want glassmorphism").**
+The pastel themes stay, and the surfaces become frosted matte glass: a soft pastel backdrop in the
+theme's colours (lavender, peach, mint blooms) sits behind everything, and cards, the sidebar and
+dialogs are translucent white with a strong blur, a thin light edge and a soft shadow. Still no
+specular shine, neon or glow. It applies to the light look in the desktop window (where the blurred
+desktop also shows faintly through) and in a browser; the dark browser look is unchanged.
