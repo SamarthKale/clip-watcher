@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { api, errorText } from '../api';
 import { Button, Card, ErrorBanner, Field, PageHeader, StatusBadge, inputCls, usePoll } from '../components/ui';
+import { OAuthGuide } from '../components/OAuthGuide';
 import type { Account } from '../types';
 
 interface Data {
@@ -15,6 +16,9 @@ export function Accounts() {
   const [clientSecret, setClientSecret] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [guidance, setGuidance] = useState('');
+  // The guide starts open until a client is saved; after that it's one click away.
+  const [showGuide, setShowGuide] = useState<boolean | null>(null);
+  const guideOpen = showGuide ?? (d.data ? !d.data.clientIdSet : false);
 
   const run = async (fn: () => Promise<void>) => {
     setError(null);
@@ -26,11 +30,15 @@ export function Accounts() {
       <PageHeader title="Accounts & Channels" />
       <ErrorBanner error={error ?? d.error} />
       <Card className="mb-4 space-y-3">
-        <h2 className="font-semibold">Google OAuth client</h2>
-        <p className="text-sm text-zinc-500">Create a "Desktop app" OAuth client in the Google Cloud Console for a project with the YouTube Data API v3 enabled, then paste its client ID here. Spikecut uses the browser sign-in flow with PKCE and requests only the YouTube upload and read-only scopes.</p>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="font-semibold">Google OAuth client</h2>
+          <Button variant="ghost" aria-expanded={guideOpen} onClick={() => setShowGuide(!guideOpen)}>{guideOpen ? 'Hide guide' : 'Show me how'}</Button>
+        </div>
+        <p className="text-sm text-zinc-500">Spikecut uploads through your own Google Cloud project, so you make a free "Desktop app" OAuth client once (about 5 minutes) and paste its client ID and secret here. Spikecut signs in through your browser with PKCE and asks only for YouTube upload and read-only access.</p>
+        {guideOpen && <OAuthGuide />}
         <div className="grid gap-3 sm:grid-cols-2">
           <Field label={d.data?.clientIdSet ? 'Client ID (saved; enter a new one to replace)' : 'Client ID'}><input className={inputCls} value={clientId} onChange={(e) => setClientId(e.target.value)} placeholder="1234-abc.apps.googleusercontent.com" /></Field>
-          <Field label="Client secret (only if Google issued one)"><input className={inputCls} type="password" autoComplete="off" value={clientSecret} onChange={(e) => setClientSecret(e.target.value)} /></Field>
+          <Field label="Client secret (shown next to the client ID)"><input className={inputCls} type="password" autoComplete="off" value={clientSecret} onChange={(e) => setClientSecret(e.target.value)} /></Field>
         </div>
         <Button disabled={clientId.trim().length < 5} onClick={() => run(async () => { await api.put('/api/accounts/oauth-client', { clientId: clientId.trim(), ...(clientSecret ? { clientSecret } : {}) }); setClientId(''); setClientSecret(''); })}>Save client</Button>
       </Card>
