@@ -119,7 +119,7 @@ Uploader's own manifest parser (`app/src/server/manifest/manifest.ts`) accepts (
   Cost is labelled "list-price equivalent" (on a subscription it counts against usage limits).
 - Cap: `edit.max_attempts_spend_usd` stops retrying a clip past a spend limit.
 
-**Done when:** the Usage view shows the two syndicate Shorts and the tgg_gta Shorts with their real
+**Done when:** the Usage view shows the already finished Shorts with their real
 numbers, and failed attempts are counted.
 
 ## Phase 3: Hinglish subtitles (Python)
